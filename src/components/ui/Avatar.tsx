@@ -12,7 +12,12 @@ const sizeClasses = {
   lg: 'h-16 w-16 text-xl',
 }
 
-const palette = ['bg-primary-100 text-primary-700', 'bg-cta-100 text-cta-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700']
+const palette = [
+  'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-300',
+  'bg-cta-100 text-cta-700 dark:bg-cta-500/20 dark:text-cta-300',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+  'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+]
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)

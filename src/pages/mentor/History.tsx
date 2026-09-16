@@ -35,8 +35,8 @@ export default function MentorHistory() {
                 <div className="flex items-center gap-3">
                   <Avatar name={student?.name ?? '?'} />
                   <div>
-                    <p className="font-bold text-slate-800">{student?.name}</p>
-                    <p className="text-sm text-slate-500">{session.topic}</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-100">{student?.name}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{session.topic}</p>
                     <p className="mt-1 text-xs text-slate-400">{formatDateBR(session.date)} · {session.start}–{session.end}</p>
                   </div>
                 </div>
@@ -44,13 +44,13 @@ export default function MentorHistory() {
               </div>
 
               {session.review && (
-                <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
                   <div className="flex items-center gap-1 text-cta">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <Star key={i} size={13} fill={i < (session.rating ?? 0) ? 'currentColor' : 'none'} />
                     ))}
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">“{session.review}”</p>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">“{session.review}”</p>
                 </div>
               )}
             </Card>
@@ -58,7 +58,7 @@ export default function MentorHistory() {
         })}
 
         {history.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-10 text-center text-sm text-slate-400">
             Nenhuma mentoria concluída até o momento.
           </div>
         )}

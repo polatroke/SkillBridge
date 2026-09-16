@@ -163,4 +163,29 @@ export interface ActivityItem {
   date: string
 }
 
+export type MentorActivityStatus = 'pendente' | 'concluida'
+
+/** Atividade/tarefa que um mentor atribui a um mentorado. */
+export interface MentorActivity {
+  id: string
+  mentorId: string
+  studentId: string
+  title: string
+  description?: string
+  dueDate?: string
+  status: MentorActivityStatus
+  createdAt: string
+}
+
+/** Mensagem trocada no chat de dúvidas entre mentor e mentorado. */
+export interface MentorMessage {
+  id: string
+  mentorId: string
+  studentId: string
+  senderId: string
+  body: string
+  read: boolean
+  createdAt: string
+}
+
 export type LoggedUser = Student | Mentor | Company

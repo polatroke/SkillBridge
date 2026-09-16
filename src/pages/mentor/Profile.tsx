@@ -16,10 +16,15 @@ export default function MentorProfile() {
   const sessions = useDataStore((s) => s.mentorSessions)
   const companies = useDataStore((s) => s.companies)
   const programs = useDataStore((s) => s.programs)
+  const updateMentorProfile = useDataStore((s) => s.updateMentorProfile)
   const getCompanyById = (id?: string) => companies.find((c) => c.id === id)
   const getProgramById = (id?: string) => programs.find((p) => p.id === id)
   const [newSkill, setNewSkill] = useState('')
   const [skills, setSkills] = useState<string[]>(mentor?.skills ?? [])
+  const [bio, setBio] = useState(mentor?.bio ?? '')
+  const [price, setPrice] = useState(mentor?.pricePerSession ?? 0)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   if (!mentor) return null
 
@@ -32,6 +37,17 @@ export default function MentorProfile() {
     setNewSkill('')
   }
 
+  const handleSave = async () => {
+    setSaving(true)
+    setSaved(false)
+    try {
+      await updateMentorProfile(mentor.id, { bio, pricePerSession: price, skills })
+      setSaved(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <DashboardLayout sidebar={<MentorSidebar />} profileTitle="Painel do Mentor">
       <PageHeader title="Perfil Profissional" description="Suas informações públicas como mentor(a), visíveis para os alunos na SkillBridge." />
@@ -40,9 +56,9 @@ export default function MentorProfile() {
         <div className="space-y-6 lg:col-span-1">
           <Card className="text-center">
             <Avatar name={mentor.name} size="lg" className="mx-auto h-20 w-20 text-2xl" />
-            <h2 className="mt-4 text-lg font-bold text-slate-900">{mentor.name}</h2>
+            <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">{mentor.name}</h2>
             <p className="text-sm text-slate-400">{mentor.email}</p>
-            <p className="mt-2 flex items-center justify-center gap-1 text-sm font-semibold text-slate-700">
+            <p className="mt-2 flex items-center justify-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Star size={14} className="text-cta" fill="currentColor" /> {mentor.rating || '—'} ({mentor.reviewsCount} avaliações)
             </p>
             {company && (
@@ -61,7 +77,7 @@ export default function MentorProfile() {
                 {mentor.programIds.map((id) => {
                   const p = getProgramById(id)
                   return (
-                    <div key={id} className="rounded-lg bg-primary-50/60 px-3 py-2 text-sm font-semibold text-primary-700">
+                    <div key={id} className="rounded-lg bg-primary-50/60 dark:bg-primary-500/10 px-3 py-2 text-sm font-semibold text-primary-700 dark:text-primary-300">
                       {p?.name}
                     </div>
                   )
@@ -76,17 +92,17 @@ export default function MentorProfile() {
             <CardHeader>
               <CardTitle>Sobre você</CardTitle>
             </CardHeader>
-            <Textarea label="Bio" defaultValue={mentor.bio} />
+            <Textarea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <Input label="Valor por sessão (R$)" type="number" defaultValue={mentor.pricePerSession} />
-              <Input label="E-mail de contato" defaultValue={mentor.email} />
+              <Input label="Valor por sessão (R$)" type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+              <Input label="E-mail de contato" defaultValue={mentor.email} disabled />
             </div>
 
             <div className="mt-4">
-              <p className="mb-2 text-sm font-semibold text-slate-700">Especialidades / skills</p>
+              <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Especialidades / skills</p>
               <div className="mb-3 flex flex-wrap gap-2">
                 {skills.map((skill) => (
-                  <span key={skill} className="flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-600">
+                  <span key={skill} className="flex items-center gap-1.5 rounded-full bg-primary-50 dark:bg-primary-500/10 px-3 py-1.5 text-xs font-semibold text-primary-600">
                     {skill}
                     <button onClick={() => setSkills((s) => s.filter((x) => x !== skill))} className="text-primary-300 hover:text-red-500">
                       <X size={12} />
@@ -100,7 +116,7 @@ export default function MentorProfile() {
                   onChange={(e) => setNewSkill(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                   placeholder="Adicionar especialidade"
-                  className="flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
+                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
                 />
                 <Button variant="secondary" icon={<Plus size={15} />} onClick={addSkill}>
                   Adicionar
@@ -108,7 +124,12 @@ export default function MentorProfile() {
               </div>
             </div>
 
-            <Button className="mt-5">Salvar perfil</Button>
+            <div className="mt-5 flex items-center gap-3">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar perfil'}
+              </Button>
+              {saved && <span className="text-sm font-semibold text-emerald-600">Salvo!</span>}
+            </div>
           </Card>
 
           <Card>
@@ -123,7 +144,7 @@ export default function MentorProfile() {
                       <Star key={i} size={13} fill={i < (r.rating ?? 0) ? 'currentColor' : 'none'} />
                     ))}
                   </div>
-                  <p className="mt-1.5 text-sm text-slate-600">“{r.review}”</p>
+                  <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">“{r.review}”</p>
                 </div>
               ))}
               {reviews.length === 0 && <p className="text-sm text-slate-400">Nenhuma avaliação recebida ainda.</p>}

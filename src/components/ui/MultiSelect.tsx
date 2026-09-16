@@ -19,19 +19,19 @@ export function MultiSelect({ label, options, selected, onChange, hint, emptyLab
 
   return (
     <div>
-      {label && <span className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</span>}
-      <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
+      {label && <span className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>}
+      <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-slate-600">
         {options.length === 0 && <p className="px-2 py-1.5 text-sm text-slate-400">{emptyLabel}</p>}
         {options.map((opt) => (
           <label
             key={opt.id}
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-slate-600 hover:bg-primary-50/60"
+            className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-slate-600 hover:bg-primary-50/60 dark:text-slate-300 dark:hover:bg-primary-500/10"
           >
             <input
               type="checkbox"
               checked={selected.includes(opt.id)}
               onChange={() => toggle(opt.id)}
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary-300"
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary-300 dark:border-slate-600 dark:bg-slate-800"
             />
             {opt.label}
           </label>

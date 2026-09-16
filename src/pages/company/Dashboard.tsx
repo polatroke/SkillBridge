@@ -61,11 +61,11 @@ export default function CompanyDashboard() {
             {pendingRequests.slice(0, 5).map((req) => {
               const student = students.find((s) => s.id === req.studentId)
               return (
-                <div key={req.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3.5">
+                <div key={req.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3.5">
                   <div className="flex items-center gap-3">
                     <Avatar name={student?.name ?? '?'} />
                     <div>
-                      <p className="text-sm font-bold text-slate-800">{student?.name}</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{student?.name}</p>
                       <p className="text-xs text-slate-400">{student?.email}</p>
                     </div>
                   </div>
@@ -83,9 +83,9 @@ export default function CompanyDashboard() {
             {programs
               .filter((p) => p.companyId === companyId)
               .map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5">
+                <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-700/60 p-3.5">
                   <div>
-                    <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{p.name}</p>
                     <p className="text-xs text-slate-400">
                       {p.studentIds.length} alunos · {p.courseIds.length} cursos · {p.mentorIds.length} mentores
                     </p>
@@ -106,7 +106,7 @@ export default function CompanyDashboard() {
                 <div key={m.id} className="flex items-center gap-3">
                   <Avatar name={m.name} size="sm" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">{m.name}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{m.name}</p>
                     <p className="truncate text-xs text-slate-400">{m.skills.slice(0, 2).join(', ')}</p>
                   </div>
                 </div>
@@ -123,16 +123,16 @@ export default function CompanyDashboard() {
               {companyCourses.map((c) => (
                 <div key={c.id} className="flex items-center gap-2.5 text-sm">
                   <BookOpen size={15} className="shrink-0 text-primary-500" />
-                  <span className="truncate text-slate-700">{c.title}</span>
+                  <span className="truncate text-slate-700 dark:text-slate-200">{c.title}</span>
                 </div>
               ))}
               {companyCourses.length === 0 && <p className="text-sm text-slate-400">Nenhum curso cadastrado ainda.</p>}
             </div>
           </Card>
 
-          <Card className="bg-primary-50/60">
+          <Card className="bg-primary-50/60 dark:bg-primary-500/10">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary-600 shadow-soft">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary-600 shadow-soft dark:bg-slate-700 dark:text-primary-300">
                 <Award size={22} />
               </div>
               <div>

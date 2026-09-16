@@ -2,18 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-surface: #F8F7FF;
+  --color-scrollbar: #C7C0F7;
+}
+
+:root.dark {
+  --color-surface: #0B0E1A;
+  --color-scrollbar: #3B3560;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-surface text-slate-800 antialiased;
+  @apply bg-surface text-slate-800 antialiased transition-colors duration-150 dark:text-slate-100;
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #C7C0F7 transparent;
+  scrollbar-color: var(--color-scrollbar) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -21,7 +31,7 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #C7C0F7;
+  background-color: var(--color-scrollbar);
   border-radius: 999px;
 }
 

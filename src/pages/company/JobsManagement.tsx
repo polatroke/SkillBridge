@@ -103,9 +103,9 @@ export default function JobsManagement() {
       />
 
       {programs.length === 0 && (
-        <Card className="mb-6 flex items-center gap-3 border border-amber-200 bg-amber-50/60">
-          <Lock size={18} className="shrink-0 text-amber-600" />
-          <p className="text-sm text-amber-700">Crie um treinamento em Gestão de Treinamentos antes de publicar vagas — toda vaga precisa estar vinculada a um.</p>
+        <Card className="mb-6 flex items-center gap-3 border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/10">
+          <Lock size={18} className="shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm text-amber-700 dark:text-amber-300">Crie um treinamento em Gestão de Treinamentos antes de publicar vagas — toda vaga precisa estar vinculada a um.</p>
         </Card>
       )}
 
@@ -115,14 +115,14 @@ export default function JobsManagement() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar vaga..."
-          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
+          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
         />
       </div>
 
       <Card padding="none" className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50/60 text-xs uppercase tracking-wide text-slate-400">
+            <thead className="border-b border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/60 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-5 py-3 font-semibold">Vaga</th>
                 <th className="px-5 py-3 font-semibold">Modalidade</th>
@@ -132,28 +132,28 @@ export default function JobsManagement() {
                 <th className="px-5 py-3 font-semibold text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {filtered.map((job) => (
                 <tr key={job.id}>
                   <td className="px-5 py-3.5">
-                    <p className="font-semibold text-slate-800">{job.title}</p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">{job.title}</p>
                     <p className="text-xs text-slate-400">
                       {job.department} · {job.type}
                     </p>
                   </td>
-                  <td className="px-5 py-3.5 text-slate-600">{job.mode}</td>
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300">{job.mode}</td>
                   <td className="px-5 py-3.5">
                     <div className="flex flex-wrap gap-1">
                       {programs
                         .filter((p) => job.programIds.includes(p.id))
                         .map((p) => (
-                          <span key={p.id} className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-600">
+                          <span key={p.id} className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-semibold text-primary-600">
                             {p.name}
                           </span>
                         ))}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 flex items-center gap-1.5 text-slate-600">
+                  <td className="px-5 py-3.5 flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                     <Briefcase size={13} /> {job.applicationsCount}
                   </td>
                   <td className="px-5 py-3.5">
@@ -161,15 +161,15 @@ export default function JobsManagement() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openEdit(job)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-50">
+                      <button onClick={() => openEdit(job)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-500/10">
                         <SquarePen size={13} /> Editar
                       </button>
                       {job.status === 'aberta' && (
-                        <button onClick={() => closeJob(job.id)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100">
+                        <button onClick={() => closeJob(job.id)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60">
                           <X size={13} /> Encerrar
                         </button>
                       )}
-                      <button onClick={() => setToDelete(job)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50">
+                      <button onClick={() => setToDelete(job)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10">
                         <Trash2 size={13} /> Remover
                       </button>
                     </div>
@@ -202,7 +202,7 @@ export default function JobsManagement() {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-700">Requisitos</span>
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Requisitos</span>
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, requirements: [...f.requirements, ''] }))}
@@ -215,7 +215,7 @@ export default function JobsManagement() {
               {form.requirements.map((r, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <input
-                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
+                    className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
                     placeholder="Ex: Conhecimento em SQL"
                     value={r}
                     onChange={(e) =>

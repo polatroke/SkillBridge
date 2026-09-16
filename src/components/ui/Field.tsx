@@ -2,19 +2,19 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTML
 import { cn } from '../../lib/cn'
 
 const fieldBase =
-  'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-400'
+  'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-primary-500/20'
 
 function Wrapper({ label, hint, error, required, children }: { label?: string; hint?: string; error?: string; required?: boolean; children: ReactNode }) {
   return (
     <label className="block">
       {label && (
-        <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">
           {label} {required && <span className="text-cta">*</span>}
         </span>
       )}
       {children}
       {hint && !error && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
-      {error && <span className="mt-1 block text-xs font-medium text-red-500">{error}</span>}
+      {error && <span className="mt-1 block text-xs font-medium text-red-500 dark:text-red-400">{error}</span>}
     </label>
   )
 }

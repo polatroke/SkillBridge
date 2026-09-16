@@ -39,11 +39,11 @@ export default function StudentProfile() {
         <div className="space-y-6 lg:col-span-1">
           <Card className="text-center">
             <Avatar name={student.name} size="lg" className="mx-auto h-20 w-20 text-2xl" />
-            <h2 className="mt-4 text-lg font-bold text-slate-900">{student.name}</h2>
+            <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">{student.name}</h2>
             <p className="flex items-center justify-center gap-1.5 text-sm text-slate-400">
               <Mail size={13} /> {student.email}
             </p>
-            {student.bio && <p className="mt-3 text-sm text-slate-500">{student.bio}</p>}
+            {student.bio && <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{student.bio}</p>}
             <Button variant="secondary" size="sm" fullWidth className="mt-5">
               Editar perfil
             </Button>
@@ -58,7 +58,7 @@ export default function StudentProfile() {
                 <span className="flex items-center gap-1.5 text-sm font-bold text-primary-700">
                   <Building2 size={15} /> {company.name}
                 </span>
-                <p className="mt-2 text-sm font-semibold text-slate-700">{program.name}</p>
+                <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{program.name}</p>
                 <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
                   <CalendarRange size={13} />
                   {formatDateBR(program.startDate)} – {formatDateBR(program.endDate)}
@@ -68,7 +68,7 @@ export default function StudentProfile() {
                 </Badge>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Você não está vinculado a nenhum treinamento corporativo no momento. Ao ser aprovado(a) por uma empresa, seus dados aparecem aqui.
               </p>
             )}
@@ -85,12 +85,12 @@ export default function StudentProfile() {
                 {myCertificates.map((cert) => {
                   const course = getCourseById(cert.courseId)
                   return (
-                    <div key={cert.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <div key={cert.id} className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
                         <Award size={20} />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-800">{course?.title}</p>
+                        <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">{course?.title}</p>
                         <p className="text-xs text-slate-400">Emitido em {formatDateBR(cert.issuedAt)}</p>
                       </div>
                     </div>
@@ -98,7 +98,7 @@ export default function StudentProfile() {
                 })}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Você ainda não tem certificados. Conclua um curso para receber o seu primeiro!</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Você ainda não tem certificados. Conclua um curso para receber o seu primeiro!</p>
             )}
           </Card>
 
@@ -109,7 +109,7 @@ export default function StudentProfile() {
             <ul className="space-y-4">
               {activity.map((a) => (
                 <li key={a.id} className="flex items-start justify-between gap-4 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                  <p className="text-sm text-slate-600">{a.description}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">{a.description}</p>
                   <span className="shrink-0 text-xs text-slate-400">{formatDateBR(a.date)}</span>
                 </li>
               ))}
@@ -121,7 +121,7 @@ export default function StudentProfile() {
             <CardHeader className="flex items-center justify-between">
               <CardTitle>Localização</CardTitle>
             </CardHeader>
-            <p className="flex items-center gap-1.5 text-sm text-slate-500">
+            <p className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
               <MapPin size={14} /> Brasil (preferências de localização não configuradas)
             </p>
           </Card>

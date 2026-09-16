@@ -136,9 +136,9 @@ export default function ProgramsManagement() {
               </div>
               <Badge status="ativo" />
             </CardHeader>
-            {p.description && <p className="text-sm text-slate-500">{p.description}</p>}
+            {p.description && <p className="text-sm text-slate-500 dark:text-slate-400">{p.description}</p>}
             <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-xl bg-primary-50/60 py-2.5">
+              <div className="rounded-xl bg-primary-50/60 dark:bg-primary-500/10 py-2.5">
                 <p className="text-lg font-extrabold text-primary-700">{p.courseIds.length}</p>
                 <p className="text-xs text-primary-500">Cursos</p>
               </div>
@@ -147,8 +147,8 @@ export default function ProgramsManagement() {
                 <p className="text-xs text-cta-500">Mentores</p>
               </div>
               <div className="rounded-xl bg-emerald-50/60 py-2.5">
-                <p className="text-lg font-extrabold text-emerald-700">{p.studentIds.length}</p>
-                <p className="text-xs text-emerald-500">Alunos</p>
+                <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">{p.studentIds.length}</p>
+                <p className="text-xs text-emerald-500 dark:text-emerald-400">Alunos</p>
               </div>
             </div>
             <Button variant="secondary" size="sm" icon={<SquarePen size={13} />} className="mt-4" onClick={() => openEdit(p)}>
@@ -159,7 +159,7 @@ export default function ProgramsManagement() {
       </div>
 
       {programs.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-10 text-center text-sm text-slate-400">
           Nenhum treinamento criado ainda. Clique em "Novo treinamento" para começar.
         </div>
       )}

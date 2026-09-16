@@ -8,6 +8,7 @@ import StudentDashboard from './pages/student/Dashboard'
 import ExploreCourses from './pages/student/ExploreCourses'
 import CourseDetail from './pages/student/CourseDetail'
 import Mentorship from './pages/student/Mentorship'
+import StudentDoubts from './pages/student/Doubts'
 import StudentProfile from './pages/student/Profile'
 import StudentJobs from './pages/student/Jobs'
 
@@ -23,6 +24,8 @@ import CompanySettings from './pages/company/Settings'
 import MentorDashboard from './pages/mentor/Dashboard'
 import MentorAvailability from './pages/mentor/Availability'
 import MyStudents from './pages/mentor/MyStudents'
+import MentorActivities from './pages/mentor/Activities'
+import MentorDoubts from './pages/mentor/Doubts'
 import MentorHistory from './pages/mentor/History'
 import MentorProfile from './pages/mentor/Profile'
 
@@ -66,6 +69,14 @@ export default function App() {
         element={
           <ProtectedRoute accountType="student">
             <Mentorship />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/aluno/duvidas"
+        element={
+          <ProtectedRoute accountType="student">
+            <StudentDoubts />
           </ProtectedRoute>
         }
       />
@@ -174,6 +185,22 @@ export default function App() {
         element={
           <ProtectedRoute accountType="mentor">
             <MyStudents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mentor/atividades"
+        element={
+          <ProtectedRoute accountType="mentor">
+            <MentorActivities />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mentor/duvidas"
+        element={
+          <ProtectedRoute accountType="mentor">
+            <MentorDoubts />
           </ProtectedRoute>
         }
       />

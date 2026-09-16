@@ -25,3 +25,10 @@ export function formatDateBR(iso: string): string {
   const [y, m, d] = iso.split('-')
   return `${d}/${m}/${y}`
 }
+
+/** Formata um timestamp ISO completo (ex: mensagem de chat) como "dd/mm, HH:MM". */
+export function formatDateTimeBR(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}

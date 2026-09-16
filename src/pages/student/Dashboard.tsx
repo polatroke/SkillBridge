@@ -7,6 +7,7 @@ import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
+import { CourseCover } from '../../components/ui/CourseCover'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { isStudentInProgram } from '../../lib/access'
@@ -58,12 +59,12 @@ export default function StudentDashboard() {
             <CardTitle>Próxima mentoria</CardTitle>
           </CardHeader>
           {nextSession ? (
-            <div className="flex flex-col items-start justify-between gap-4 rounded-xl bg-primary-50/60 p-5 sm:flex-row sm:items-center">
+            <div className="flex flex-col items-start justify-between gap-4 rounded-xl bg-primary-50/60 dark:bg-primary-500/10 p-5 sm:flex-row sm:items-center">
               <div className="flex items-center gap-4">
                 <Avatar name={getMentorById(nextSession.mentorId)?.name ?? '?'} size="lg" />
                 <div>
-                  <p className="font-bold text-slate-800">{getMentorById(nextSession.mentorId)?.name}</p>
-                  <p className="text-sm text-slate-500">{nextSession.topic}</p>
+                  <p className="font-bold text-slate-800 dark:text-slate-100">{getMentorById(nextSession.mentorId)?.name}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{nextSession.topic}</p>
                   <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-primary-600">
                     <CalendarClock size={13} /> {nextSession.date} · {nextSession.start} – {nextSession.end}
                   </p>
@@ -76,8 +77,8 @@ export default function StudentDashboard() {
               </Link>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <p className="text-sm text-slate-500">Você não tem mentorias agendadas no momento.</p>
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 p-6 text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Você não tem mentorias agendadas no momento.</p>
               <Link to="/aluno/mentoria" className="mt-3 inline-block">
                 <Button size="sm">Agendar mentoria</Button>
               </Link>
@@ -97,12 +98,12 @@ export default function StudentDashboard() {
                   <Link
                     key={id}
                     to={`/aluno/cursos/${id}`}
-                    className="flex items-center gap-4 rounded-xl border border-slate-100 p-3 transition-colors hover:border-primary-200"
+                    className="flex items-center gap-4 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3 transition-colors hover:border-primary-200"
                   >
-                    <img src={course.coverUrl} alt="" className="h-14 w-20 shrink-0 rounded-lg object-cover" />
+                    <CourseCover coverUrl={course.coverUrl} title={course.title} className="h-14 w-20 shrink-0 rounded-lg" iconSize={18} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-slate-800">{course.title}</p>
-                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
+                      <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">{course.title}</p>
+                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700/60">
                         <div className="h-1.5 rounded-full bg-primary" style={{ width: '45%' }} />
                       </div>
                     </div>
@@ -122,13 +123,13 @@ export default function StudentDashboard() {
           <ul className="space-y-4">
             {recentActivity.map((a) => (
               <li key={a.id} className="flex gap-3">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 dark:bg-primary-500/10 text-primary-600">
                   {a.type === 'curso' && <BookOpen size={15} />}
                   {a.type === 'mentoria' && <GraduationCap size={15} />}
                   {a.type === 'certificado' && <Star size={15} />}
                 </div>
                 <div>
-                  <p className="text-sm text-slate-700">{a.description}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200">{a.description}</p>
                   <p className="text-xs text-slate-400">{a.date}</p>
                 </div>
               </li>

@@ -52,10 +52,10 @@ export default function Reports() {
               return (
                 <div key={p.id}>
                   <div className="mb-1.5 flex items-center justify-between text-sm">
-                    <span className="font-semibold text-slate-700">{p.name}</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{p.name}</span>
                     <span className="text-slate-400">{pct}%</span>
                   </div>
-                  <div className="h-2.5 w-full rounded-full bg-slate-100">
+                  <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-700/60">
                     <div className="h-2.5 rounded-full bg-primary" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
@@ -74,8 +74,8 @@ export default function Reports() {
               const count = certificates.filter((cert) => cert.courseId === c.id).length
               return (
                 <div key={c.id} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">{c.title}</span>
-                  <span className="font-bold text-slate-800">{count}</span>
+                  <span className="text-slate-600 dark:text-slate-300">{c.title}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100">{count}</span>
                 </div>
               )
             })}

@@ -10,6 +10,7 @@ import { Modal } from '../../components/ui/Modal'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Input, Select, Textarea } from '../../components/ui/Field'
 import { MultiSelect } from '../../components/ui/MultiSelect'
+import { CourseCover } from '../../components/ui/CourseCover'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
 import { CATEGORIES } from '../../mocks/courses'
@@ -113,20 +114,20 @@ export default function CoursesManagement() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar curso..."
-          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
+          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {companyCourses.map((course) => (
           <Card key={course.id} padding="none" className="overflow-hidden">
-            <img src={course.coverUrl} alt="" className="h-32 w-full object-cover" />
+            <CourseCover coverUrl={course.coverUrl} title={course.title} className="h-32 w-full" />
             <div className="p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide text-primary-500">{course.category}</span>
                 <Badge status={course.status === 'publicado' ? 'publicado' : 'rascunho'} />
               </div>
-              <h3 className="mt-1.5 line-clamp-2 text-sm font-bold text-slate-800">{course.title}</h3>
+              <h3 className="mt-1.5 line-clamp-2 text-sm font-bold text-slate-800 dark:text-slate-100">{course.title}</h3>
               <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
                 <BookOpen size={13} /> {course.enrolledCount} alunos matriculados
               </p>
@@ -134,13 +135,13 @@ export default function CoursesManagement() {
                 {programs
                   .filter((p) => course.programIds.includes(p.id))
                   .map((p) => (
-                    <span key={p.id} className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-600">
+                    <span key={p.id} className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-semibold text-primary-600">
                       {p.name}
                     </span>
                   ))}
                 {course.programIds.length === 0 && <span className="text-xs text-slate-400">Sem treinamento vinculado</span>}
               </div>
-              <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3.5">
+              <div className="mt-4 flex items-center gap-2 border-t border-slate-100 dark:border-slate-700/60 pt-3.5">
                 <Button variant="secondary" size="sm" icon={<SquarePen size={13} />} onClick={() => openEdit(course)}>
                   Editar
                 </Button>
@@ -154,7 +155,7 @@ export default function CoursesManagement() {
       </div>
 
       {companyCourses.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-10 text-center text-sm text-slate-400">
           Nenhum curso cadastrado ainda. Clique em "Novo curso" para começar.
         </div>
       )}
@@ -216,7 +217,7 @@ export default function CoursesManagement() {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-700">Módulos</span>
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Módulos</span>
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, modules: [...f.modules, emptyModule()] }))}
@@ -227,28 +228,28 @@ export default function CoursesManagement() {
             </div>
             <div className="space-y-3">
               {form.modules.map((mod, idx) => (
-                <div key={mod.id} className="rounded-xl border border-slate-200 p-3.5">
+                <div key={mod.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
                   <div className="flex items-start gap-2">
-                    <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary-50 text-xs font-bold text-primary-600">
+                    <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary-50 dark:bg-primary-500/10 text-xs font-bold text-primary-600">
                       {idx + 1}
                     </span>
                     <div className="flex-1 space-y-2">
                       <div className="grid grid-cols-3 gap-2">
                         <input
-                          className="col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
+                          className="col-span-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
                           placeholder="Título do módulo"
                           value={mod.title}
                           onChange={(e) => updateModule(mod.id, { title: e.target.value })}
                         />
                         <input
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
+                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
                           placeholder="Duração (ex: 4h)"
                           value={mod.duration}
                           onChange={(e) => updateModule(mod.id, { duration: e.target.value })}
                         />
                       </div>
                       <textarea
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
                         placeholder="Aulas (uma por linha)"
                         rows={2}
                         value={mod.lessons.join('\n')}

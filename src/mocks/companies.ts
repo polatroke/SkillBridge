@@ -11,10 +11,7 @@ export const companies: Company[] = [
     sector: 'Tecnologia',
     logoUrl: '',
     avatarUrl: '',
-    adminUsers: [
-      { name: 'Patrícia Menezes', email: 'patricia.menezes@technova.com.br', role: 'Admin RH' },
-      { name: 'Vitor Otávio', email: 'vitorotavio4@gmail.com', role: 'Admin Plataforma' },
-    ],
+    adminUsers: [{ name: 'Patrícia Menezes', email: 'patricia.menezes@technova.com.br', role: 'Admin RH' }],
   },
 ]
 

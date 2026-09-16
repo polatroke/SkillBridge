@@ -5,6 +5,7 @@ import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Card } from '../../components/ui/Card'
+import { CourseCover } from '../../components/ui/CourseCover'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleCoursesForStudent, isStudentInProgram } from '../../lib/access'
@@ -47,7 +48,7 @@ export default function ExploreCourses() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar curso..."
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
           />
         </div>
         <div className="flex flex-wrap gap-2">
@@ -56,7 +57,9 @@ export default function ExploreCourses() {
               key={c}
               onClick={() => setCategory(c)}
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                category === c ? 'bg-primary text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-primary-50'
+                category === c
+                  ? 'bg-primary text-white'
+                  : 'bg-white text-slate-500 dark:text-slate-400 ring-1 ring-slate-200 hover:bg-primary-50 dark:bg-slate-800 dark:ring-slate-700 dark:hover:bg-primary-500/10'
               }`}
             >
               {c}
@@ -72,9 +75,9 @@ export default function ExploreCourses() {
             <Link key={course.id} to={`/aluno/cursos/${course.id}`}>
               <Card hoverable padding="none" className="h-full overflow-hidden">
                 <div className="relative">
-                  <img src={course.coverUrl} alt={course.title} className="h-40 w-full object-cover" />
+                  <CourseCover coverUrl={course.coverUrl} title={course.title} className="h-40 w-full" />
                   {company && (
-                    <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-primary-700 shadow-soft">
+                    <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-primary-700 shadow-soft dark:bg-slate-900/80 dark:text-primary-300">
                       <Building2 size={12} /> Curso da {company.name}
                     </span>
                   )}
@@ -86,8 +89,8 @@ export default function ExploreCourses() {
                       <Star size={12} className="text-cta" fill="currentColor" /> {course.rating || '—'}
                     </span>
                   </div>
-                  <h3 className="mt-1.5 line-clamp-2 text-base font-bold text-slate-800">{course.title}</h3>
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-500">{course.summary}</p>
+                  <h3 className="mt-1.5 line-clamp-2 text-base font-bold text-slate-800 dark:text-slate-100">{course.title}</h3>
+                  <p className="mt-2 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{course.summary}</p>
                   <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
                     <span className="flex items-center gap-1">
                       <BookOpen size={13} /> {course.totalHours}h · {course.modules.length} módulos
@@ -102,7 +105,7 @@ export default function ExploreCourses() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="mt-6 rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+        <div className="mt-6 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-10 text-center text-sm text-slate-400">
           Nenhum curso encontrado com esses filtros.
         </div>
       )}

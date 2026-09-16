@@ -4,6 +4,7 @@ import { GraduationCap, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { Footer } from './Footer'
 import { Button } from '../ui/Button'
+import { ThemeToggle } from '../ui/ThemeToggle'
 
 /** Layout para telas públicas/institucionais (Landing, Login, Cadastro). Sempre fecha com Footer. */
 export function PublicLayout({ children }: { children: ReactNode }) {
@@ -11,31 +12,32 @@ export function PublicLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
-      <header className="sticky top-0 z-30 border-b border-primary-100/70 bg-surface/90 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-primary-100/70 bg-surface/90 backdrop-blur dark:border-slate-800">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link to="/" className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
               <GraduationCap size={20} />
             </div>
-            <span className="text-lg font-extrabold text-slate-900">SkillBridge</span>
+            <span className="text-lg font-extrabold text-slate-900 dark:text-slate-50">SkillBridge</span>
           </Link>
 
           <nav className="hidden items-center gap-8 md:flex">
-            <a href="#cursos" className="text-sm font-semibold text-slate-600 hover:text-primary-700">
+            <Link to="/#cursos" className="text-sm font-semibold text-slate-600 hover:text-primary-700 dark:text-slate-300 dark:hover:text-primary-300">
               Cursos
-            </a>
-            <a href="#mentoria" className="text-sm font-semibold text-slate-600 hover:text-primary-700">
+            </Link>
+            <Link to="/#mentoria" className="text-sm font-semibold text-slate-600 hover:text-primary-700 dark:text-slate-300 dark:hover:text-primary-300">
               Mentoria
-            </a>
-            <a href="#empresas" className="text-sm font-semibold text-slate-600 hover:text-primary-700">
+            </Link>
+            <Link to="/#empresas" className="text-sm font-semibold text-slate-600 hover:text-primary-700 dark:text-slate-300 dark:hover:text-primary-300">
               Para empresas
-            </a>
-            <a href="#depoimentos" className="text-sm font-semibold text-slate-600 hover:text-primary-700">
+            </Link>
+            <Link to="/#depoimentos" className="text-sm font-semibold text-slate-600 hover:text-primary-700 dark:text-slate-300 dark:hover:text-primary-300">
               Depoimentos
-            </a>
+            </Link>
           </nav>
 
-          <div className="hidden items-center gap-3 md:flex">
+          <div className="hidden items-center gap-2 md:flex">
+            <ThemeToggle />
             <Link to="/login">
               <Button variant="ghost" size="sm">
                 Entrar
@@ -48,22 +50,28 @@ export function PublicLayout({ children }: { children: ReactNode }) {
             </Link>
           </div>
 
-          <button className="p-2 text-slate-600 md:hidden" onClick={() => setOpen((v) => !v)} aria-label="Abrir menu">
-            {open ? <X size={22} /> : <Menu size={22} />}
-          </button>
+          <div className="flex items-center gap-1 md:hidden">
+            <ThemeToggle />
+            <button className="p-2 text-slate-600 dark:text-slate-300" onClick={() => setOpen((v) => !v)} aria-label="Abrir menu">
+              {open ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
 
         {open && (
-          <div className="space-y-1 border-t border-primary-100/70 px-6 py-4 md:hidden">
-            <a href="#cursos" className="block py-2 text-sm font-semibold text-slate-600">
+          <div className="space-y-1 border-t border-primary-100/70 px-6 py-4 md:hidden dark:border-slate-800">
+            <Link to="/#cursos" onClick={() => setOpen(false)} className="block py-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
               Cursos
-            </a>
-            <a href="#mentoria" className="block py-2 text-sm font-semibold text-slate-600">
+            </Link>
+            <Link to="/#mentoria" onClick={() => setOpen(false)} className="block py-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
               Mentoria
-            </a>
-            <a href="#empresas" className="block py-2 text-sm font-semibold text-slate-600">
+            </Link>
+            <Link to="/#empresas" onClick={() => setOpen(false)} className="block py-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
               Para empresas
-            </a>
+            </Link>
+            <Link to="/#depoimentos" onClick={() => setOpen(false)} className="block py-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+              Depoimentos
+            </Link>
             <div className="mt-3 flex gap-3">
               <Link to="/login" className="flex-1">
                 <Button variant="secondary" size="sm" fullWidth>

@@ -55,15 +55,15 @@ export default function MentorDashboard() {
           {upcoming.map((session) => {
             const student = getStudentById(session.studentId)
             return (
-              <div key={session.id} className="flex flex-col items-start justify-between gap-3 rounded-xl border border-slate-100 p-4 sm:flex-row sm:items-center">
+              <div key={session.id} className="flex flex-col items-start justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-4 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
                   <Avatar name={student?.name ?? '?'} />
                   <div>
-                    <p className="text-sm font-bold text-slate-800">{student?.name}</p>
-                    <p className="text-xs text-slate-500">{session.topic}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{student?.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{session.topic}</p>
                   </div>
                 </div>
-                <span className="flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-bold text-primary-700">
+                <span className="flex items-center gap-1.5 rounded-full bg-primary-50 dark:bg-primary-500/10 px-3 py-1.5 text-xs font-bold text-primary-700">
                   <CalendarClock size={13} /> {formatDateBR(session.date)} · {session.start}–{session.end}
                 </span>
               </div>

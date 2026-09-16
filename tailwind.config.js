@@ -1,9 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
+        surface: 'var(--color-surface)',
         primary: {
           DEFAULT: '#6C5CE7',
           50: '#F1EFFD',
@@ -30,7 +32,6 @@ export default {
           800: '#79280F',
           900: '#4B1809',
         },
-        surface: '#F8F7FF',
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],

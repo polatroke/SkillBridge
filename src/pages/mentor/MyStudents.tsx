@@ -42,7 +42,7 @@ export default function MyStudents() {
                 <div className="flex items-center gap-3">
                   <Avatar name={student?.name ?? '?'} size="lg" />
                   <div>
-                    <p className="font-bold text-slate-800">{student?.name}</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-100">{student?.name}</p>
                     <p className="text-xs text-slate-400">{student?.email}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {studentSessions.map((s) => (
@@ -55,13 +55,13 @@ export default function MyStudents() {
                 </div>
               </div>
 
-              <div className="mt-4 border-t border-slate-100 pt-4">
-                <p className="mb-1.5 text-sm font-semibold text-slate-700">Anotações / feedback</p>
+              <div className="mt-4 border-t border-slate-100 dark:border-slate-700/60 pt-4">
+                <p className="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">Anotações / feedback</p>
                 <textarea
                   value={draftValue}
                   onChange={(e) => setDrafts((d) => ({ ...d, [lastSession.id]: e.target.value }))}
                   placeholder="Registre observações sobre o desenvolvimento deste aluno..."
-                  className="min-h-[80px] w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
+                  className="min-h-[80px] w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
                 />
                 <Button
                   size="sm"
@@ -77,7 +77,7 @@ export default function MyStudents() {
         })}
 
         {studentIds.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-10 text-center text-sm text-slate-400">
             Você ainda não tem alunos mentorados. Assim que uma sessão for agendada, o aluno aparece aqui.
           </div>
         )}

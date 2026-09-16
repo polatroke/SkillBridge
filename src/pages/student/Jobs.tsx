@@ -18,8 +18,24 @@ export default function StudentJobs() {
   const student = useCurrentStudent(authUser?.id)
   const jobs = useDataStore((s) => s.jobs)
   const companies = useDataStore((s) => s.companies)
+  const applyToJob = useDataStore((s) => s.applyToJob)
   const getCompanyById = (id?: string) => companies.find((c) => c.id === id)
   const [applied, setApplied] = useState<Job | null>(null)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
+
+  const handleApply = async (job: Job) => {
+    setApplyError(null)
+    setApplyingId(job.id)
+    try {
+      await applyToJob(job.id)
+      setApplied(job)
+    } catch {
+      setApplyError('Não foi possível enviar sua candidatura. Tente novamente.')
+    } finally {
+      setApplyingId(null)
+    }
+  }
 
   const visibleJobs = useMemo(() => getVisibleJobsForStudent(jobs, student), [jobs, student])
   const inProgram = isStudentInProgram(student)
@@ -32,6 +48,10 @@ export default function StudentJobs() {
         title="Vagas"
         description="Vagas internas exclusivas de empresas parceiras — não existe uma vitrine pública de vagas na SkillBridge."
       />
+
+      {applyError && (
+        <p className="mb-4 rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-400">{applyError}</p>
+      )}
 
       {!inProgram ? (
         <EmptyState
@@ -58,17 +78,17 @@ export default function StudentJobs() {
                         <Building2 size={12} /> {company?.name}
                       </span>
                       <Badge status={job.status === 'aberta' ? 'aberta' : 'encerrada'} />
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">{job.type}</span>
+                      <span className="rounded-full bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{job.type}</span>
                     </div>
-                    <h3 className="mt-2 text-lg font-bold text-slate-800">{job.title}</h3>
-                    <p className="mt-1 text-sm text-slate-500">{job.description}</p>
+                    <h3 className="mt-2 text-lg font-bold text-slate-800 dark:text-slate-100">{job.title}</h3>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{job.description}</p>
                     <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
                       <span className="flex items-center gap-1">
                         <MapPin size={13} /> {job.location} · {job.mode}
                       </span>
                       <span>{job.department}</span>
                     </div>
-                    <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-slate-500">
+                    <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-slate-500 dark:text-slate-400">
                       {job.requirements.slice(0, 3).map((r) => (
                         <li key={r}>{r}</li>
                       ))}
@@ -76,11 +96,11 @@ export default function StudentJobs() {
                   </div>
                   <Button
                     size="sm"
-                    disabled={job.status !== 'aberta'}
+                    disabled={job.status !== 'aberta' || applyingId === job.id}
                     icon={<Send size={14} />}
-                    onClick={() => setApplied(job)}
+                    onClick={() => handleApply(job)}
                   >
-                    Candidatar-se
+                    {applyingId === job.id ? 'Enviando...' : 'Candidatar-se'}
                   </Button>
                 </div>
               </Card>
@@ -95,7 +115,7 @@ export default function StudentJobs() {
         title="Candidatura enviada!"
         footer={<Button onClick={() => setApplied(null)}>Fechar</Button>}
       >
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
           Sua candidatura para <strong>{applied?.title}</strong> foi enviada para a equipe de recrutamento. Boa sorte!
         </p>
       </Modal>

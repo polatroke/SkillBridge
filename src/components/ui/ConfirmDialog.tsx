@@ -37,7 +37,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, description, co
         </>
       }
     >
-      <p className="text-sm text-slate-500">Essa ação não poderá ser desfeita.</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400">Essa ação não poderá ser desfeita.</p>
     </Modal>
   )
 }

@@ -1,28 +1,46 @@
 import { create } from 'zustand'
+import type { RealtimeChannel } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabaseClient'
 import type {
+  ActivityItem,
+  Certificate,
   Company,
   Course,
   EnrollmentRequest,
   Job,
   Mentor,
+  MentorActivity,
   MentorInvite,
+  MentorMessage,
   MentorSession,
   Program,
   Student,
 } from '../types'
-import { students as studentsSeed } from '../mocks/students'
-import { mentors as mentorsSeed } from '../mocks/mentors'
-import { courses as coursesSeed } from '../mocks/courses'
-import { programs as programsSeed } from '../mocks/programs'
-import { jobs as jobsSeed } from '../mocks/jobs'
-import { companies as companiesSeed } from '../mocks/companies'
-import { enrollmentRequests as requestsSeed, mentorInvites as invitesSeed } from '../mocks/requests'
-import { mentorSessions as sessionsSeed, certificates as certificatesSeed, activityItems as activitySeed } from '../mocks/sessions'
-import type { ActivityItem, Certificate } from '../types'
+import { fetchStudents, updateStudentRow } from '../lib/supabase/queries/students'
+import { fetchMentors, updateMentorRow, deleteMentorRow, setMentorProgramsRows, replaceMentorAvailabilityRows } from '../lib/supabase/queries/mentors'
+import { fetchCompanies, updateCompanyRow } from '../lib/supabase/queries/companies'
+import { fetchCourses, insertCourseRow, updateCourseRow, deleteCourseRow } from '../lib/supabase/queries/courses'
+import { fetchPrograms, insertProgramRow, updateProgramRow, setProgramStudentsRows } from '../lib/supabase/queries/programs'
+import { fetchJobs, insertJobRow, updateJobRow, deleteJobRow } from '../lib/supabase/queries/jobs'
+import {
+  fetchEnrollmentRequests,
+  updateEnrollmentRequestStatus,
+  fetchMentorInvites,
+  insertMentorInviteRow,
+  touchMentorInviteRow,
+  deleteMentorInviteRow,
+} from '../lib/supabase/queries/requests'
+import { fetchMentorSessions, updateMentorSessionRow, upsertMentorSessionNotes, fetchCertificates, fetchActivityItems } from '../lib/supabase/queries/sessions'
+import { fetchMentorActivities, insertActivityRow, updateActivityStatusRow, deleteActivityRow } from '../lib/supabase/queries/activities'
+import { fetchMentorMessages, insertMessageRow, markThreadReadRows } from '../lib/supabase/queries/messages'
+import {
+  bookMentorSession,
+  inviteExistingStudent,
+  enrollInCourse as enrollInCourseRequest,
+  applyToJob as applyToJobRequest,
+} from '../lib/supabase/rpc'
 import { nextDateForWeekday } from '../lib/date'
-
-let uid = 1000
-const nextId = (prefix: string) => `${prefix}-${uid++}`
+import { useAuthStore } from './authStore'
 
 interface DataState {
   students: Student[]
@@ -36,292 +54,338 @@ interface DataState {
   mentorSessions: MentorSession[]
   certificates: Certificate[]
   activityItems: ActivityItem[]
+  mentorActivities: MentorActivity[]
+  mentorMessages: MentorMessage[]
+  /** true depois que a primeira carga (pós-login) terminou. */
+  dataLoaded: boolean
 
-  // -------- Cadastro (Auth) -------------------------------------------------
-  registerStudent: (name: string, email: string) => Student
-  registerMentor: (name: string, email: string, bio: string, skills: string[]) => Mentor
-  registerCompany: (data: { cnpj: string; razaoSocial: string; name: string; email: string; sector: string }) => Company
+  fetchAll: () => Promise<void>
+  clear: () => void
 
   // -------- Aprovação de alunos (Empresa) --------------------------------
-  approveRequest: (requestId: string) => void
-  rejectRequest: (requestId: string) => void
-  inviteStudentByEmail: (companyId: string, programId: string, name: string, email: string) => void
+  approveRequest: (requestId: string) => Promise<void>
+  rejectRequest: (requestId: string) => Promise<void>
+  inviteStudentByEmail: (programId: string, email: string) => Promise<void>
 
-  // -------- Cursos (Empresa) ----------------------------------------------
-  addCourse: (course: Omit<Course, 'id' | 'enrolledCount' | 'rating'>) => void
-  updateCourse: (id: string, course: Partial<Course>) => void
-  deleteCourse: (id: string) => void
+  // -------- Cursos (Empresa + Aluno) ---------------------------------------
+  addCourse: (course: Omit<Course, 'id' | 'enrolledCount' | 'rating'>) => Promise<void>
+  updateCourse: (id: string, course: Partial<Course>) => Promise<void>
+  deleteCourse: (id: string) => Promise<void>
+  enrollInCourse: (courseId: string) => Promise<void>
 
-  // -------- Mentores (Empresa) --------------------------------------------
-  addMentorDirect: (mentor: Omit<Mentor, 'id' | 'type' | 'rating' | 'reviewsCount' | 'availability'>) => void
-  inviteMentorByEmail: (companyId: string, name: string, email: string) => void
-  resendMentorInvite: (inviteId: string) => void
-  removeMentor: (mentorId: string) => void
-  removeMentorInvite: (inviteId: string) => void
-  updateMentorPrograms: (mentorId: string, programIds: string[]) => void
+  // -------- Mentores (Empresa + Mentor) -------------------------------------
+  addMentorDirect: (mentor: Omit<Mentor, 'id' | 'type' | 'rating' | 'reviewsCount' | 'availability'>) => Promise<void>
+  inviteMentorByEmail: (companyId: string, name: string, email: string) => Promise<void>
+  resendMentorInvite: (inviteId: string) => Promise<void>
+  removeMentor: (mentorId: string) => Promise<void>
+  removeMentorInvite: (inviteId: string) => Promise<void>
+  updateMentorPrograms: (mentorId: string, programIds: string[]) => Promise<void>
+  updateMentorProfile: (mentorId: string, patch: { bio?: string; pricePerSession?: number; skills?: string[] }) => Promise<void>
 
   // -------- Treinamentos (Empresa) -----------------------------------------
-  addProgram: (program: Omit<Program, 'id'>) => void
-  updateProgram: (id: string, program: Partial<Program>) => void
-  setProgramStudents: (programId: string, studentIds: string[]) => void
+  addProgram: (program: Omit<Program, 'id'>) => Promise<void>
+  updateProgram: (id: string, program: Partial<Program>) => Promise<void>
+  setProgramStudents: (programId: string, studentIds: string[]) => Promise<void>
 
-  // -------- Vagas (Empresa) -------------------------------------------------
-  addJob: (job: Omit<Job, 'id' | 'applicationsCount' | 'createdAt'>) => void
-  updateJob: (id: string, job: Partial<Job>) => void
-  closeJob: (id: string) => void
-  deleteJob: (id: string) => void
+  // -------- Vagas (Empresa + Aluno) ------------------------------------------
+  addJob: (job: Omit<Job, 'id' | 'applicationsCount' | 'createdAt'>) => Promise<void>
+  updateJob: (id: string, job: Partial<Job>) => Promise<void>
+  closeJob: (id: string) => Promise<void>
+  deleteJob: (id: string) => Promise<void>
+  applyToJob: (jobId: string) => Promise<void>
+
+  // -------- Empresa (Configurações) -----------------------------------------
+  updateCompanyProfile: (
+    companyId: string,
+    patch: Partial<{ name: string; razaoSocial: string; sector: string; email: string; logoUrl: string }>
+  ) => Promise<void>
 
   // -------- Mentoria (Aluno + Mentor) ---------------------------------------
-  bookSession: (mentorId: string, studentId: string, availabilityId: string, topic: string) => void
-  setMentorAvailability: (mentorId: string, availability: Mentor['availability']) => void
-  completeSessionFeedback: (sessionId: string, notes: string) => void
-  addSessionReview: (sessionId: string, rating: number, review: string) => void
+  bookSession: (mentorId: string, studentId: string, availabilityId: string, topic: string) => Promise<void>
+  setMentorAvailability: (mentorId: string, availability: Mentor['availability']) => Promise<void>
+  completeSessionFeedback: (sessionId: string, notes: string) => Promise<void>
+  addSessionReview: (sessionId: string, rating: number, review: string) => Promise<void>
+
+  // -------- Atividades do mentor (Mentor + Aluno) ----------------------------
+  assignActivity: (studentId: string, title: string, description?: string, dueDate?: string) => Promise<void>
+  updateActivityStatus: (activityId: string, status: MentorActivity['status']) => Promise<void>
+  deleteActivity: (activityId: string) => Promise<void>
+
+  // -------- Dúvidas / chat (Mentor + Aluno) -----------------------------------
+  sendMessage: (mentorId: string, studentId: string, body: string) => Promise<void>
+  markThreadRead: (mentorId: string, studentId: string) => Promise<void>
+}
+
+const fetchers = {
+  students: fetchStudents,
+  mentors: fetchMentors,
+  companies: fetchCompanies,
+  courses: fetchCourses,
+  programs: fetchPrograms,
+  jobs: fetchJobs,
+  enrollmentRequests: fetchEnrollmentRequests,
+  mentorInvites: fetchMentorInvites,
+  mentorSessions: fetchMentorSessions,
+  certificates: fetchCertificates,
+  activityItems: fetchActivityItems,
+  mentorActivities: fetchMentorActivities,
+  mentorMessages: fetchMentorMessages,
+} as const
+
+type SliceKey = keyof typeof fetchers
+
+async function refetch(keys: SliceKey[]) {
+  const entries = await Promise.all(keys.map(async (k) => [k, await fetchers[k]()] as const))
+  useDataStore.setState(Object.fromEntries(entries))
+}
+
+let messagesChannel: RealtimeChannel | null = null
+
+/**
+ * Assina novas mensagens de chat em tempo real para o usuário logado
+ * (mentor ou aluno). Chamada depois de `fetchAll()` no login/refresh da
+ * sessão; `company` não tem chat, então não assina nada.
+ */
+export function subscribeRealtime() {
+  const { user, accountType } = useAuthStore.getState()
+  // Sempre parte de um estado limpo: evita "cannot add callbacks after subscribe()"
+  // caso essa função seja chamada mais de uma vez (ex: refresh + onAuthStateChange).
+  unsubscribeRealtime()
+  if (!user || (accountType !== 'mentor' && accountType !== 'student')) return
+
+  const column = accountType === 'mentor' ? 'mentor_id' : 'student_id'
+  messagesChannel = supabase
+    .channel(`mentor-messages-${user.id}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'mentor_messages', filter: `${column}=eq.${user.id}` },
+      () => void refetch(['mentorMessages'])
+    )
+    .subscribe()
+}
+
+export function unsubscribeRealtime() {
+  if (!messagesChannel) return
+  void supabase.removeChannel(messagesChannel)
+  messagesChannel = null
 }
 
 export const useDataStore = create<DataState>((set) => ({
-  students: studentsSeed,
-  mentors: mentorsSeed,
-  companies: companiesSeed,
-  courses: coursesSeed,
-  programs: programsSeed,
-  jobs: jobsSeed,
-  enrollmentRequests: requestsSeed,
-  mentorInvites: invitesSeed,
-  mentorSessions: sessionsSeed,
-  certificates: certificatesSeed,
-  activityItems: activitySeed,
+  students: [],
+  mentors: [],
+  companies: [],
+  courses: [],
+  programs: [],
+  jobs: [],
+  enrollmentRequests: [],
+  mentorInvites: [],
+  mentorSessions: [],
+  certificates: [],
+  activityItems: [],
+  mentorActivities: [],
+  mentorMessages: [],
+  dataLoaded: false,
 
-  registerStudent: (name, email) => {
-    const student: Student = {
-      id: nextId('student'),
-      type: 'student',
-      name,
-      email,
-      enrolledCourseIds: [],
-      completedCourseIds: [],
-      certificateIds: [],
-      studyHours: 0,
-    }
-    set((state) => ({ students: [...state.students, student] }))
-    return student
+  fetchAll: async () => {
+    const keys = Object.keys(fetchers) as SliceKey[]
+    const entries = await Promise.all(keys.map(async (k) => [k, await fetchers[k]()] as const))
+    set({ ...Object.fromEntries(entries), dataLoaded: true })
   },
 
-  registerMentor: (name, email, bio, skills) => {
-    const mentor: Mentor = {
-      id: nextId('mentor'),
-      type: 'mentor',
-      name,
-      email,
-      bio,
-      skills,
-      pricePerSession: 150,
-      rating: 0,
-      reviewsCount: 0,
-      programIds: [],
-      availability: [],
-    }
-    set((state) => ({ mentors: [...state.mentors, mentor] }))
-    return mentor
+  clear: () =>
+    set({
+      students: [],
+      mentors: [],
+      companies: [],
+      courses: [],
+      programs: [],
+      jobs: [],
+      enrollmentRequests: [],
+      mentorInvites: [],
+      mentorSessions: [],
+      certificates: [],
+      activityItems: [],
+      mentorActivities: [],
+      mentorMessages: [],
+      dataLoaded: false,
+    }),
+
+  approveRequest: async (requestId) => {
+    const req = useDataStore.getState().enrollmentRequests.find((r) => r.id === requestId)
+    if (!req) return
+    await updateEnrollmentRequestStatus(requestId, 'ativo')
+    await updateStudentRow(req.studentId, { companyId: req.companyId, programId: req.programId })
+    await refetch(['enrollmentRequests', 'students', 'programs'])
   },
 
-  registerCompany: ({ cnpj, razaoSocial, name, email, sector }) => {
-    const company: Company = {
-      id: nextId('company'),
-      type: 'company',
-      name,
-      razaoSocial,
-      cnpj,
-      email,
-      sector,
-      adminUsers: [{ name, email, role: 'Admin Plataforma' }],
-    }
-    set((state) => ({ companies: [...state.companies, company] }))
-    return company
+  rejectRequest: async (requestId) => {
+    await updateEnrollmentRequestStatus(requestId, 'recusado')
+    await refetch(['enrollmentRequests'])
   },
 
-  approveRequest: (requestId) =>
-    set((state) => {
-      const req = state.enrollmentRequests.find((r) => r.id === requestId)
-      if (!req) return state
-      return {
-        enrollmentRequests: state.enrollmentRequests.map((r) => (r.id === requestId ? { ...r, status: 'ativo' } : r)),
-        students: state.students.map((s) =>
-          s.id === req.studentId ? { ...s, companyId: req.companyId, programId: req.programId } : s
-        ),
-        programs: state.programs.map((p) =>
-          p.id === req.programId && !p.studentIds.includes(req.studentId)
-            ? { ...p, studentIds: [...p.studentIds, req.studentId] }
-            : p
-        ),
-      }
-    }),
+  inviteStudentByEmail: async (programId, email) => {
+    await inviteExistingStudent(programId, email)
+    await refetch(['enrollmentRequests', 'students', 'programs'])
+  },
 
-  rejectRequest: (requestId) =>
-    set((state) => ({
-      enrollmentRequests: state.enrollmentRequests.map((r) => (r.id === requestId ? { ...r, status: 'recusado' } : r)),
-    })),
+  addCourse: async (course) => {
+    await insertCourseRow(course)
+    await refetch(['courses'])
+  },
 
-  inviteStudentByEmail: (companyId, programId, name, email) =>
-    set((state) => {
-      const existing = state.students.find((s) => s.email.toLowerCase() === email.toLowerCase())
-      const student: Student = existing ?? {
-        id: nextId('student'),
-        type: 'student',
-        name,
-        email,
-        enrolledCourseIds: [],
-        completedCourseIds: [],
-        certificateIds: [],
-        studyHours: 0,
-      }
-      const request: EnrollmentRequest = {
-        id: nextId('req'),
-        studentId: student.id,
-        companyId,
-        programId,
-        status: 'pendente',
-        requestedAt: new Date().toISOString().slice(0, 10),
-      }
-      return {
-        students: existing ? state.students : [...state.students, student],
-        enrollmentRequests: [...state.enrollmentRequests, request],
-      }
-    }),
+  updateCourse: async (id, patch) => {
+    await updateCourseRow(id, patch)
+    await refetch(['courses'])
+  },
 
-  addCourse: (course) =>
-    set((state) => ({
-      courses: [...state.courses, { ...course, id: nextId('course'), enrolledCount: 0, rating: 0 }],
-    })),
+  deleteCourse: async (id) => {
+    await deleteCourseRow(id)
+    await refetch(['courses'])
+  },
 
-  updateCourse: (id, patch) =>
-    set((state) => ({
-      courses: state.courses.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    })),
+  enrollInCourse: async (courseId) => {
+    await enrollInCourseRequest(courseId)
+    await refetch(['courses', 'students', 'activityItems'])
+  },
 
-  deleteCourse: (id) =>
-    set((state) => ({
-      courses: state.courses.filter((c) => c.id !== id),
-    })),
+  addMentorDirect: async () => {
+    throw new Error(
+      'Cadastro direto de mentor não está disponível nesta versão: um login real só pode ser criado pela própria pessoa em /cadastro. Use "Convidar por e-mail" e peça para o mentor se cadastrar.'
+    )
+  },
 
-  addMentorDirect: (mentor) =>
-    set((state) => ({
-      mentors: [
-        ...state.mentors,
-        { ...mentor, id: nextId('mentor'), type: 'mentor', rating: 0, reviewsCount: 0, availability: [] },
-      ],
-    })),
+  inviteMentorByEmail: async (companyId, name, email) => {
+    await insertMentorInviteRow(companyId, name, email)
+    await refetch(['mentorInvites'])
+  },
 
-  inviteMentorByEmail: (companyId, name, email) =>
-    set((state) => ({
-      mentorInvites: [
-        ...state.mentorInvites,
-        { id: nextId('invite'), companyId, name, email, status: 'pendente', invitedAt: new Date().toISOString().slice(0, 10) },
-      ],
-    })),
+  resendMentorInvite: async (inviteId) => {
+    await touchMentorInviteRow(inviteId)
+    await refetch(['mentorInvites'])
+  },
 
-  resendMentorInvite: (inviteId) =>
-    set((state) => ({
-      mentorInvites: state.mentorInvites.map((i) => (i.id === inviteId ? { ...i, invitedAt: new Date().toISOString().slice(0, 10) } : i)),
-    })),
+  removeMentor: async (mentorId) => {
+    await deleteMentorRow(mentorId)
+    await refetch(['mentors'])
+  },
 
-  removeMentor: (mentorId) =>
-    set((state) => ({
-      mentors: state.mentors.filter((m) => m.id !== mentorId),
-    })),
+  removeMentorInvite: async (inviteId) => {
+    await deleteMentorInviteRow(inviteId)
+    await refetch(['mentorInvites'])
+  },
 
-  removeMentorInvite: (inviteId) =>
-    set((state) => ({
-      mentorInvites: state.mentorInvites.filter((i) => i.id !== inviteId),
-    })),
+  updateMentorPrograms: async (mentorId, programIds) => {
+    await setMentorProgramsRows(mentorId, programIds)
+    await refetch(['mentors'])
+  },
 
-  updateMentorPrograms: (mentorId, programIds) =>
-    set((state) => ({
-      mentors: state.mentors.map((m) => (m.id === mentorId ? { ...m, programIds } : m)),
-    })),
+  updateMentorProfile: async (mentorId, patch) => {
+    await updateMentorRow(mentorId, patch)
+    await refetch(['mentors'])
+  },
 
-  addProgram: (program) =>
-    set((state) => ({
-      programs: [...state.programs, { ...program, id: nextId('program') }],
-    })),
+  addProgram: async (program) => {
+    await insertProgramRow(program)
+    await refetch(['programs', 'students', 'mentors'])
+  },
 
-  updateProgram: (id, patch) =>
-    set((state) => ({
-      programs: state.programs.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    })),
+  updateProgram: async (id, patch) => {
+    await updateProgramRow(id, patch)
+    await refetch(['programs', 'courses'])
+  },
 
-  setProgramStudents: (programId, studentIds) =>
-    set((state) => {
-      const program = state.programs.find((p) => p.id === programId)
-      if (!program) return state
-      return {
-        programs: state.programs.map((p) => (p.id === programId ? { ...p, studentIds } : p)),
-        students: state.students.map((s) => {
-          if (studentIds.includes(s.id)) return { ...s, companyId: program.companyId, programId }
-          if (s.programId === programId) return { ...s, companyId: undefined, programId: undefined }
-          return s
-        }),
-      }
-    }),
+  setProgramStudents: async (programId, studentIds) => {
+    const program = useDataStore.getState().programs.find((p) => p.id === programId)
+    if (!program) return
+    await setProgramStudentsRows(programId, program.companyId, studentIds)
+    await refetch(['programs', 'students'])
+  },
 
-  addJob: (job) =>
-    set((state) => ({
-      jobs: [...state.jobs, { ...job, id: nextId('job'), applicationsCount: 0, createdAt: new Date().toISOString().slice(0, 10) }],
-    })),
+  addJob: async (job) => {
+    await insertJobRow(job)
+    await refetch(['jobs'])
+  },
 
-  updateJob: (id, patch) =>
-    set((state) => ({
-      jobs: state.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)),
-    })),
+  updateJob: async (id, patch) => {
+    await updateJobRow(id, patch)
+    await refetch(['jobs'])
+  },
 
-  closeJob: (id) =>
-    set((state) => ({
-      jobs: state.jobs.map((j) => (j.id === id ? { ...j, status: 'encerrada' } : j)),
-    })),
+  closeJob: async (id) => {
+    await updateJobRow(id, { status: 'encerrada' })
+    await refetch(['jobs'])
+  },
 
-  deleteJob: (id) =>
-    set((state) => ({
-      jobs: state.jobs.filter((j) => j.id !== id),
-    })),
+  deleteJob: async (id) => {
+    await deleteJobRow(id)
+    await refetch(['jobs'])
+  },
 
-  bookSession: (mentorId, studentId, availabilityId, topic) =>
-    set((state) => {
-      const mentor = state.mentors.find((m) => m.id === mentorId)
-      const slot = mentor?.availability.find((a) => a.id === availabilityId)
-      if (!mentor || !slot) return state
-      const session: MentorSession = {
-        id: nextId('session'),
-        mentorId,
-        studentId,
-        date: nextDateForWeekday(slot.weekday),
-        start: slot.start,
-        end: slot.end,
-        status: 'agendada',
-        topic,
-      }
-      return {
-        mentorSessions: [...state.mentorSessions, session],
-        mentors: state.mentors.map((m) =>
-          m.id === mentorId
-            ? { ...m, availability: m.availability.map((a) => (a.id === availabilityId ? { ...a, booked: true } : a)) }
-            : m
-        ),
-      }
-    }),
+  applyToJob: async (jobId) => {
+    await applyToJobRequest(jobId)
+    await refetch(['jobs'])
+  },
 
-  setMentorAvailability: (mentorId, availability) =>
-    set((state) => ({
-      mentors: state.mentors.map((m) => (m.id === mentorId ? { ...m, availability } : m)),
-    })),
+  updateCompanyProfile: async (companyId, patch) => {
+    await updateCompanyRow(companyId, patch)
+    await refetch(['companies'])
+  },
 
-  completeSessionFeedback: (sessionId, notes) =>
-    set((state) => ({
-      mentorSessions: state.mentorSessions.map((s) => (s.id === sessionId ? { ...s, notes } : s)),
-    })),
+  bookSession: async (mentorId, _studentId, availabilityId, topic) => {
+    const mentor = useDataStore.getState().mentors.find((m) => m.id === mentorId)
+    const slot = mentor?.availability.find((a) => a.id === availabilityId)
+    if (!slot) return
+    await bookMentorSession(availabilityId, nextDateForWeekday(slot.weekday), topic)
+    await refetch(['mentorSessions', 'mentors'])
+  },
 
-  addSessionReview: (sessionId, rating, review) =>
-    set((state) => ({
-      mentorSessions: state.mentorSessions.map((s) => (s.id === sessionId ? { ...s, rating, review, status: 'concluida' } : s)),
-    })),
+  setMentorAvailability: async (mentorId, availability) => {
+    await replaceMentorAvailabilityRows(mentorId, availability)
+    await refetch(['mentors'])
+  },
+
+  completeSessionFeedback: async (sessionId, notes) => {
+    const mentorId = useAuthStore.getState().user?.id
+    if (!mentorId) return
+    await upsertMentorSessionNotes(sessionId, mentorId, notes)
+    await refetch(['mentorSessions'])
+  },
+
+  addSessionReview: async (sessionId, rating, review) => {
+    await updateMentorSessionRow(sessionId, { rating, review, status: 'concluida' })
+    await refetch(['mentorSessions'])
+  },
+
+  assignActivity: async (studentId, title, description, dueDate) => {
+    const mentorId = useAuthStore.getState().user?.id
+    if (!mentorId) return
+    await insertActivityRow({ mentorId, studentId, title, description, dueDate })
+    await refetch(['mentorActivities'])
+  },
+
+  updateActivityStatus: async (activityId, status) => {
+    await updateActivityStatusRow(activityId, status)
+    await refetch(['mentorActivities'])
+  },
+
+  deleteActivity: async (activityId) => {
+    await deleteActivityRow(activityId)
+    await refetch(['mentorActivities'])
+  },
+
+  sendMessage: async (mentorId, studentId, body) => {
+    const senderId = useAuthStore.getState().user?.id
+    if (!senderId || !body.trim()) return
+    await insertMessageRow(mentorId, studentId, senderId, body.trim())
+    await refetch(['mentorMessages'])
+  },
+
+  markThreadRead: async (mentorId, studentId) => {
+    const viewerId = useAuthStore.getState().user?.id
+    if (!viewerId) return
+    await markThreadReadRows(mentorId, studentId, viewerId)
+    await refetch(['mentorMessages'])
+  },
 }))
 
 export const useCurrentStudent = (id?: string) => useDataStore((state) => state.students.find((s) => s.id === id))

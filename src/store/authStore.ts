@@ -1,34 +1,70 @@
 import { create } from 'zustand'
-import type { AccountType, LoggedUser } from '../types'
-import { companies } from '../mocks/companies'
-import { students } from '../mocks/students'
-import { mentors } from '../mocks/mentors'
+import type { LoggedUser } from '../types'
+import { supabase } from '../lib/supabaseClient'
+import { resolveSessionUser, signIn as signInRequest, signOut as signOutRequest } from '../lib/supabase/auth'
+import { useDataStore, subscribeRealtime, unsubscribeRealtime } from './dataStore'
 
 interface AuthState {
   user: LoggedUser | null
-  accountType: AccountType | null
-  /** Faz login "mockado": tenta casar por e-mail (aluno/mentor) ou CNPJ (empresa); senão usa a conta demo padrão do tipo. */
-  login: (type: AccountType, identifier: string) => LoggedUser
-  loginAs: (user: LoggedUser) => void
-  logout: () => void
+  accountType: LoggedUser['type'] | null
+  /** true enquanto a sessão ainda está sendo restaurada (evita redirect-flash pro /login no F5). */
+  loading: boolean
+  login: (email: string, password: string) => Promise<LoggedUser | null>
+  logout: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accountType: null,
-  login: (type, identifier) => {
-    let user: LoggedUser
-    const cleaned = identifier.trim().toLowerCase()
-    if (type === 'student') {
-      user = students.find((s) => s.email.toLowerCase() === cleaned) ?? students[0]
-    } else if (type === 'mentor') {
-      user = mentors.find((m) => m.email.toLowerCase() === cleaned) ?? mentors[0]
-    } else {
-      user = companies.find((c) => c.cnpj.replace(/\D/g, '') === cleaned.replace(/\D/g, '')) ?? companies[0]
+  loading: true,
+
+  login: async (email, password) => {
+    const user = await signInRequest(email, password)
+    set({ user, accountType: user?.type ?? null })
+    if (user) {
+      void useDataStore.getState().fetchAll()
+      subscribeRealtime()
     }
-    set({ user, accountType: type })
     return user
   },
-  loginAs: (user) => set({ user, accountType: user.type }),
-  logout: () => set({ user: null, accountType: null }),
+
+  logout: async () => {
+    await signOutRequest()
+    set({ user: null, accountType: null })
+    useDataStore.getState().clear()
+    unsubscribeRealtime()
+  },
+
+  refresh: async () => {
+    const { data } = await supabase.auth.getSession()
+    const authUser = data.session?.user
+    const user = authUser ? await resolveSessionUser(authUser) : null
+    set({ user, accountType: user?.type ?? null, loading: false })
+    if (user) {
+      void useDataStore.getState().fetchAll()
+      subscribeRealtime()
+    }
+  },
 }))
+
+// Restaura a sessão assim que o módulo carrega...
+void useAuthStore.getState().refresh()
+
+// ...e mantém o estado sincronizado com login/logout/expiração em qualquer aba.
+supabase.auth.onAuthStateChange((_event, session) => {
+  const authUser = session?.user
+  if (!authUser) {
+    useAuthStore.setState({ user: null, accountType: null, loading: false })
+    useDataStore.getState().clear()
+    unsubscribeRealtime()
+    return
+  }
+  resolveSessionUser(authUser).then((user) => {
+    useAuthStore.setState({ user, accountType: user?.type ?? null, loading: false })
+    if (user) {
+      void useDataStore.getState().fetchAll()
+      subscribeRealtime()
+    }
+  })
+})
