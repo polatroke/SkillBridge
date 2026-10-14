@@ -10,7 +10,8 @@ import { Avatar } from '../../components/ui/Avatar'
 import { CourseCover } from '../../components/ui/CourseCover'
 import { useAuthStore } from '../../store/authStore'
 import { useCurrentStudent, useDataStore } from '../../store/dataStore'
-import { isStudentInProgram } from '../../lib/access'
+import { canStudentAccessCourse } from '../../lib/access'
+import { getCourseProgress } from '../../lib/progress'
 
 export default function CourseDetail() {
   const { courseId } = useParams()
@@ -19,9 +20,12 @@ export default function CourseDetail() {
   const course = useDataStore((s) => s.courses.find((c) => c.id === courseId))
   const companies = useDataStore((s) => s.companies)
   const enrollInCourse = useDataStore((s) => s.enrollInCourse)
+  const lessonProgress = useDataStore((s) => s.lessonProgress)
+  const certificates = useDataStore((s) => s.certificates)
   const getCompanyById = (id?: string) => companies.find((c) => c.id === id)
   const [openModule, setOpenModule] = useState<string | null>(course?.modules[0]?.id ?? null)
   const [enrolling, setEnrolling] = useState(false)
+  const [enrollError, setEnrollError] = useState<string | null>(null)
 
   if (!course || !student) {
     return (
@@ -31,12 +35,7 @@ export default function CourseDetail() {
     )
   }
 
-  const isCompanyCourse = !!course.companyId
-  const hasAccess =
-    !isCompanyCourse ||
-    (isStudentInProgram(student) && student.companyId === course.companyId && course.programIds.includes(student.programId!))
-
-  if (!hasAccess) {
+  if (!canStudentAccessCourse(course, student)) {
     const company = getCompanyById(course.companyId)
     return (
       <DashboardLayout sidebar={<StudentSidebar />} profileTitle="Painel do Aluno">
@@ -59,6 +58,9 @@ export default function CourseDetail() {
   const company = getCompanyById(course.companyId)
   const isEnrolled = student.enrolledCourseIds.includes(course.id)
   const isCompleted = student.completedCourseIds.includes(course.id)
+  const progress = getCourseProgress(course, student, lessonProgress)
+  const certificate = certificates.find((c) => c.studentId === student.id && c.courseId === course.id)
+  const playerLink = (moduleIndex: number, lessonIndex: number) => `/aluno/cursos/${course.id}/aulas?aula=${moduleIndex}-${lessonIndex}`
 
   return (
     <DashboardLayout sidebar={<StudentSidebar />} profileTitle="Painel do Aluno">
@@ -126,11 +128,27 @@ export default function CourseDetail() {
                 </button>
                 {openModule === mod.id && (
                   <div className="border-t border-slate-100 dark:border-slate-700/60 px-5 py-3">
-                    {mod.lessons.map((lesson) => (
-                      <div key={lesson} className="flex items-center gap-2.5 py-2 text-sm text-slate-600 dark:text-slate-300">
-                        <PlayCircle size={15} className="text-primary-400" /> {lesson}
-                      </div>
-                    ))}
+                    {mod.lessons.map((lesson, lessonIndex) => {
+                      const done = isEnrolled && progress.isLessonDone({ moduleIndex: idx, lessonIndex })
+                      const icon = done ? (
+                        <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                      ) : (
+                        <PlayCircle size={15} className="shrink-0 text-primary-400" />
+                      )
+                      return isEnrolled ? (
+                        <Link
+                          key={lessonIndex}
+                          to={playerLink(idx, lessonIndex)}
+                          className="flex items-center gap-2.5 py-2 text-sm text-slate-600 hover:text-primary-600 dark:text-slate-300 dark:hover:text-primary-300"
+                        >
+                          {icon} {lesson}
+                        </Link>
+                      ) : (
+                        <div key={lessonIndex} className="flex items-center gap-2.5 py-2 text-sm text-slate-600 dark:text-slate-300">
+                          {icon} {lesson}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </Card>
@@ -144,28 +162,38 @@ export default function CourseDetail() {
               <>
                 <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Seu progresso</p>
                 <div className="mt-2 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-700/60">
-                  <div className="h-2.5 rounded-full bg-primary" style={{ width: isCompleted ? '100%' : '45%' }} />
+                  <div className="h-2.5 rounded-full bg-primary" style={{ width: `${progress.percent}%` }} />
                 </div>
-                <p className="mt-1.5 text-xs text-slate-400">{isCompleted ? '100% concluído' : '45% concluído'}</p>
-                <Button fullWidth className="mt-4">
-                  {isCompleted ? 'Revisar curso' : 'Continuar curso'}
-                </Button>
+                <p className="mt-1.5 text-xs text-slate-400">
+                  {progress.percent}% concluído · {progress.done} de {progress.total} aulas
+                </p>
+                <Link to={`/aluno/cursos/${course.id}/aulas`}>
+                  <Button fullWidth className="mt-4" icon={<PlayCircle size={16} />} disabled={progress.total === 0}>
+                    {isCompleted ? 'Revisar curso' : progress.done > 0 ? 'Continuar curso' : 'Começar curso'}
+                  </Button>
+                </Link>
               </>
             ) : (
-              <Button
-                fullWidth
-                disabled={enrolling}
-                onClick={async () => {
-                  setEnrolling(true)
-                  try {
-                    await enrollInCourse(course.id)
-                  } finally {
-                    setEnrolling(false)
-                  }
-                }}
-              >
-                {enrolling ? 'Matriculando...' : 'Matricular-se'}
-              </Button>
+              <>
+                <Button
+                  fullWidth
+                  disabled={enrolling}
+                  onClick={async () => {
+                    setEnrolling(true)
+                    setEnrollError(null)
+                    try {
+                      await enrollInCourse(course.id)
+                    } catch {
+                      setEnrollError('Não foi possível concluir a matrícula. Tente novamente.')
+                    } finally {
+                      setEnrolling(false)
+                    }
+                  }}
+                >
+                  {enrolling ? 'Matriculando...' : 'Matricular-se'}
+                </Button>
+                {enrollError && <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{enrollError}</p>}
+              </>
             )}
           </Card>
 
@@ -180,7 +208,7 @@ export default function CourseDetail() {
             </div>
           </Card>
 
-          {isCompleted && (
+          {isCompleted && certificate && (
             <Card className="bg-primary-50/60 dark:bg-primary-500/10">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary-600 shadow-soft dark:bg-slate-700 dark:text-primary-300">
@@ -191,9 +219,11 @@ export default function CourseDetail() {
                   <p className="text-xs text-primary-600">Você concluiu este curso</p>
                 </div>
               </div>
-              <Button variant="secondary" fullWidth size="sm" className="mt-4">
-                Baixar certificado
-              </Button>
+              <Link to={`/aluno/certificados/${certificate.id}`}>
+                <Button variant="secondary" fullWidth size="sm" className="mt-4">
+                  Ver certificado
+                </Button>
+              </Link>
             </Card>
           )}
         </div>

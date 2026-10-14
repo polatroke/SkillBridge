@@ -30,6 +30,12 @@ export function getVisibleCoursesForStudent(courses: Course[], student: Student 
   return [...getPublicCourses(courses), ...getCompanyCoursesForStudent(courses, student)]
 }
 
+/** O aluno pode abrir este curso? Público, ou da empresa + treinamento em que ele está. */
+export function canStudentAccessCourse(course: Course, student: Student | null | undefined): boolean {
+  if (!course.companyId) return true
+  return isStudentInProgram(student) && student!.companyId === course.companyId && course.programIds.includes(student!.programId!)
+}
+
 /** Mentores públicos: sem empresa vinculada. */
 export function getPublicMentors(mentors: Mentor[]): Mentor[] {
   return mentors.filter((m) => !m.companyId)

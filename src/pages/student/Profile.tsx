@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Award, Building2, CalendarRange, Mail, MapPin } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
@@ -85,15 +86,19 @@ export default function StudentProfile() {
                 {myCertificates.map((cert) => {
                   const course = getCourseById(cert.courseId)
                   return (
-                    <div key={cert.id} className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-4">
+                    <Link
+                      key={cert.id}
+                      to={`/aluno/certificados/${cert.id}`}
+                      className="flex items-center gap-3 rounded-xl border border-slate-100 p-4 transition-colors hover:border-primary-200 dark:border-slate-700/60"
+                    >
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
                         <Award size={20} />
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">{course?.title}</p>
-                        <p className="text-xs text-slate-400">Emitido em {formatDateBR(cert.issuedAt)}</p>
+                        <p className="text-xs text-slate-400">Emitido em {formatDateBR(cert.issuedAt)} · Ver certificado</p>
                       </div>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>

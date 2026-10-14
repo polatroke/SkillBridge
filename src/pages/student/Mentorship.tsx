@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Building2, CalendarCheck2, CheckCircle2, ClipboardList, Search, Star } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Building2, CalendarCheck2, CalendarClock, CheckCircle2, MessageCircle, Search, Star } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -9,16 +10,18 @@ import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { Textarea } from '../../components/ui/Field'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleMentorsForStudent } from '../../lib/access'
-import { formatDateBR, nextDateForWeekday } from '../../lib/date'
+import { formatDateBR, nextDateForWeekday, todayISO } from '../../lib/date'
 import { cn } from '../../lib/cn'
-import type { Mentor } from '../../types'
+import type { Mentor, MentorSession } from '../../types'
 
 const tabs = [
   { key: 'buscar', label: 'Buscar mentores', icon: Search },
-  { key: 'atividades', label: 'Minhas atividades', icon: ClipboardList },
+  { key: 'sessoes', label: 'Minhas sessões', icon: CalendarClock },
 ] as const
 
 type TabKey = (typeof tabs)[number]['key']
@@ -28,17 +31,27 @@ export default function Mentorship() {
   const student = useCurrentStudent(authUser?.id)
   const mentors = useDataStore((s) => s.mentors)
   const companies = useDataStore((s) => s.companies)
-  const activities = useDataStore((s) => s.mentorActivities)
-  const updateActivityStatus = useDataStore((s) => s.updateActivityStatus)
+  const sessions = useDataStore((s) => s.mentorSessions)
   const getCompanyById = (id?: string) => companies.find((c) => c.id === id)
   const getMentorById = (id?: string) => mentors.find((m) => m.id === id)
   const bookSession = useDataStore((s) => s.bookSession)
-  const [tab, setTab] = useState<TabKey>('buscar')
+  const cancelSession = useDataStore((s) => s.cancelSession)
+  const addSessionReview = useDataStore((s) => s.addSessionReview)
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<TabKey>(searchParams.get('aba') === 'sessoes' ? 'sessoes' : 'buscar')
   const [search, setSearch] = useState('')
   const [scheduling, setScheduling] = useState<Mentor | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
   const [topic, setTopic] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const [booking, setBooking] = useState(false)
+  const [bookError, setBookError] = useState<string | null>(null)
+  const [cancelId, setCancelId] = useState<string | null>(null)
+  const [reviewing, setReviewing] = useState<MentorSession | null>(null)
+  const [rating, setRating] = useState(0)
+  const [review, setReview] = useState('')
+  const [savingReview, setSavingReview] = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
   const visibleMentors = useMemo(() => getVisibleMentorsForStudent(mentors, student), [mentors, student])
   const filtered = visibleMentors.filter(
@@ -50,23 +63,73 @@ export default function Mentorship() {
     setSelectedSlot(null)
     setTopic('')
     setConfirmed(false)
+    setBookError(null)
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!scheduling || !selectedSlot || !student) return
-    bookSession(scheduling.id, student.id, selectedSlot, topic || `Mentoria com ${scheduling.name}`)
-    setConfirmed(true)
+    setBooking(true)
+    setBookError(null)
+    try {
+      await bookSession(scheduling.id, student.id, selectedSlot, topic || `Mentoria com ${scheduling.name}`)
+      setConfirmed(true)
+    } catch {
+      setBookError('Não foi possível agendar: o horário pode ter acabado de ser reservado. Escolha outro e tente novamente.')
+    } finally {
+      setBooking(false)
+    }
+  }
+
+  const handleCancel = async (sessionId: string) => {
+    setSessionError(null)
+    try {
+      await cancelSession(sessionId)
+    } catch {
+      setSessionError('Não foi possível cancelar a mentoria. Tente novamente.')
+    }
+  }
+
+  const openReview = (session: MentorSession) => {
+    setReviewing(session)
+    setRating(0)
+    setReview('')
+    setSessionError(null)
+  }
+
+  const handleReview = async () => {
+    if (!reviewing || rating === 0) return
+    setSavingReview(true)
+    setSessionError(null)
+    try {
+      await addSessionReview(reviewing.id, rating, review.trim())
+      setReviewing(null)
+    } catch {
+      setSessionError('Não foi possível enviar sua avaliação. Tente novamente.')
+    } finally {
+      setSavingReview(false)
+    }
   }
 
   if (!student) return null
 
-  const myActivities = activities.filter((a) => a.studentId === student.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const today = todayISO()
+  const mySessions = sessions.filter((s) => s.studentId === student.id)
+  const upcoming = mySessions
+    .filter((s) => s.status === 'agendada' && s.date >= today)
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+  // Já passou da data (ou foi concluída) e ainda não tem nota: o aluno avalia, e isso marca a sessão como realizada.
+  const toReview = mySessions
+    .filter((s) => !s.rating && ((s.status === 'agendada' && s.date < today) || s.status === 'concluida'))
+    .sort((a, b) => b.date.localeCompare(a.date))
+  const history = mySessions
+    .filter((s) => (s.status === 'concluida' && !!s.rating) || s.status === 'cancelada')
+    .sort((a, b) => b.date.localeCompare(a.date))
 
   return (
     <DashboardLayout sidebar={<StudentSidebar />} profileTitle="Painel do Aluno">
       <PageHeader
         title="Mentoria"
-        description="Agende sessões 1:1 e acompanhe as atividades que seus mentores passaram. Para tirar dúvidas por chat, veja a página Dúvidas."
+        description="Agende sessões 1:1 com mentores e acompanhe suas mentorias. Para tirar dúvidas por chat, veja a página Dúvidas."
       />
 
       <div className="mb-6 flex flex-wrap gap-2 border-b border-slate-100 dark:border-slate-700/60">
@@ -82,6 +145,9 @@ export default function Mentorship() {
             )}
           >
             <t.icon size={15} /> {t.label}
+            {t.key === 'sessoes' && upcoming.length + toReview.length > 0 && (
+              <span className="rounded-full bg-cta px-1.5 text-[11px] text-white">{upcoming.length + toReview.length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -160,8 +226,8 @@ export default function Mentorship() {
                   <Button variant="ghost" onClick={() => setScheduling(null)}>
                     Cancelar
                   </Button>
-                  <Button onClick={handleConfirm} disabled={!selectedSlot}>
-                    Confirmar agendamento
+                  <Button onClick={handleConfirm} disabled={!selectedSlot || booking}>
+                    {booking ? 'Agendando...' : 'Confirmar agendamento'}
                   </Button>
                 </>
               ) : (
@@ -175,7 +241,7 @@ export default function Mentorship() {
                   <CheckCircle2 size={28} />
                 </div>
                 <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
-                  Sua mentoria com <strong>{scheduling?.name}</strong> foi confirmada. Você pode acompanhar os detalhes no seu Dashboard.
+                  Sua mentoria com <strong>{scheduling?.name}</strong> foi confirmada. Você pode acompanhar os detalhes na aba Minhas sessões.
                 </p>
               </div>
             ) : (
@@ -212,50 +278,187 @@ export default function Mentorship() {
                     className="min-h-[80px] w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
                   />
                 </label>
+                {bookError && (
+                  <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">{bookError}</p>
+                )}
               </div>
             )}
           </Modal>
         </>
       )}
 
-      {tab === 'atividades' && (
-        <div className="space-y-3">
-          {myActivities.map((activity) => {
-            const mentor = getMentorById(activity.mentorId)
-            return (
-              <Card key={activity.id} className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div className="flex items-center gap-3">
-                  <Avatar name={mentor?.name ?? '?'} />
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{activity.title}</p>
-                    {activity.description && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{activity.description}</p>}
-                    <p className="mt-1 text-xs text-slate-400">
-                      Passada por {mentor?.name ?? 'seu mentor'}
-                      {activity.dueDate && ` · Prazo: ${formatDateBR(activity.dueDate)}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge status={activity.status === 'concluida' ? 'concluido' : 'pendente'} />
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => updateActivityStatus(activity.id, activity.status === 'concluida' ? 'pendente' : 'concluida')}
-                  >
-                    {activity.status === 'concluida' ? 'Reabrir' : 'Marcar como concluída'}
-                  </Button>
-                </div>
-              </Card>
-            )
-          })}
-
-          {myActivities.length === 0 && (
-            <EmptyState
-              icon={ClipboardList}
-              title="Nenhuma atividade por aqui"
-              description="Quando um mentor atribuir uma atividade para você, ela aparece nesta lista."
-            />
+      {tab === 'sessoes' && (
+        <div className="space-y-8">
+          {sessionError && !reviewing && (
+            <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">{sessionError}</p>
           )}
+
+          <section>
+            <h2 className="mb-3 text-lg font-bold text-slate-900 dark:text-slate-50">Próximas mentorias</h2>
+            <div className="space-y-3">
+              {upcoming.map((session) => {
+                const mentor = getMentorById(session.mentorId)
+                return (
+                  <Card key={session.id} className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={mentor?.name ?? '?'} />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{mentor?.name ?? 'Mentor'}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{session.topic}</p>
+                        <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-primary-600 dark:text-primary-300">
+                          <CalendarClock size={13} /> {formatDateBR(session.date)} · {session.start}–{session.end}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Link to={`/aluno/duvidas?with=${session.mentorId}`}>
+                        <Button size="sm" variant="secondary" icon={<MessageCircle size={14} />}>
+                          Mensagem
+                        </Button>
+                      </Link>
+                      <Button size="sm" variant="danger" onClick={() => setCancelId(session.id)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </Card>
+                )
+              })}
+              {upcoming.length === 0 && (
+                <EmptyState
+                  icon={CalendarClock}
+                  title="Nenhuma mentoria agendada"
+                  description="Escolha um mentor e um horário disponível para agendar sua próxima sessão."
+                  action={
+                    <Button size="sm" onClick={() => setTab('buscar')}>
+                      Buscar mentores
+                    </Button>
+                  }
+                />
+              )}
+            </div>
+          </section>
+
+          {toReview.length > 0 && (
+            <section>
+              <h2 className="mb-1 text-lg font-bold text-slate-900 dark:text-slate-50">Avalie suas mentorias</h2>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Sua avaliação confirma que a sessão aconteceu e ajuda outros alunos a escolher mentores.
+              </p>
+              <div className="space-y-3">
+                {toReview.map((session) => {
+                  const mentor = getMentorById(session.mentorId)
+                  return (
+                    <Card key={session.id} className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={mentor?.name ?? '?'} />
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{mentor?.name ?? 'Mentor'}</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">{session.topic}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {formatDateBR(session.date)} · {session.start}–{session.end}
+                          </p>
+                        </div>
+                      </div>
+                      <Button size="sm" icon={<Star size={14} />} onClick={() => openReview(session)}>
+                        Avaliar
+                      </Button>
+                    </Card>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {history.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-lg font-bold text-slate-900 dark:text-slate-50">Histórico</h2>
+              <Card padding="none" className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                {history.map((session) => {
+                  const mentor = getMentorById(session.mentorId)
+                  return (
+                    <div key={session.id} className="flex flex-col justify-between gap-2 px-5 py-4 sm:flex-row sm:items-center">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {session.topic} <span className="font-normal text-slate-400">com {mentor?.name ?? 'Mentor'}</span>
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          {formatDateBR(session.date)} · {session.start}–{session.end}
+                        </p>
+                        {session.review && <p className="mt-1 text-xs italic text-slate-500 dark:text-slate-400">“{session.review}”</p>}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        {!!session.rating && (
+                          <span className="flex items-center gap-0.5" aria-label={`Nota ${session.rating} de 5`}>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Star
+                                key={n}
+                                size={13}
+                                className={n <= session.rating! ? 'text-cta' : 'text-slate-200 dark:text-slate-600'}
+                                fill="currentColor"
+                              />
+                            ))}
+                          </span>
+                        )}
+                        <Badge status={session.status === 'cancelada' ? 'cancelada' : 'concluido'}>
+                          {session.status === 'cancelada' ? 'Cancelada' : 'Realizada'}
+                        </Badge>
+                      </div>
+                    </div>
+                  )
+                })}
+              </Card>
+            </section>
+          )}
+
+          <ConfirmDialog
+            open={!!cancelId}
+            onClose={() => setCancelId(null)}
+            onConfirm={() => cancelId && void handleCancel(cancelId)}
+            title="Cancelar mentoria"
+            description="O horário volta a ficar disponível na agenda do mentor."
+            confirmLabel="Cancelar mentoria"
+            danger
+          />
+
+          <Modal
+            open={!!reviewing}
+            onClose={() => setReviewing(null)}
+            title="Avaliar mentoria"
+            description={reviewing ? `${reviewing.topic} com ${getMentorById(reviewing.mentorId)?.name ?? 'seu mentor'}` : undefined}
+            size="sm"
+            footer={
+              <>
+                <Button variant="ghost" onClick={() => setReviewing(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleReview} disabled={rating === 0 || savingReview}>
+                  {savingReview ? 'Enviando...' : 'Enviar avaliação'}
+                </Button>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Como foi a sessão?</p>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} type="button" onClick={() => setRating(n)} aria-label={`${n} estrela${n > 1 ? 's' : ''}`}>
+                      <Star size={28} className={n <= rating ? 'text-cta' : 'text-slate-200 dark:text-slate-600'} fill="currentColor" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Textarea
+                label="Comentário (opcional)"
+                value={review}
+                onChange={(e) => setReview(e.target.value)}
+                placeholder="O que foi mais útil? O que poderia melhorar?"
+              />
+              {sessionError && (
+                <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">{sessionError}</p>
+              )}
+            </div>
+          </Modal>
         </div>
       )}
     </DashboardLayout>

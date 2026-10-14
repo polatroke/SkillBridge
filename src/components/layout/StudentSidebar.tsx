@@ -1,4 +1,4 @@
-import { LayoutDashboard, BookOpen, Users, MessageCircle, Briefcase, UserCircle } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, ClipboardList, MessageCircle, Briefcase, UserCircle } from 'lucide-react'
 import { Sidebar, type SidebarItem } from './Sidebar'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
@@ -8,6 +8,7 @@ const baseItems: SidebarItem[] = [
   { to: '/aluno', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/aluno/cursos', label: 'Explorar Cursos', icon: BookOpen },
   { to: '/aluno/mentoria', label: 'Mentoria', icon: Users },
+  { to: '/aluno/atividades', label: 'Atividades', icon: ClipboardList },
   { to: '/aluno/duvidas', label: 'Dúvidas', icon: MessageCircle },
   { to: '/aluno/vagas', label: 'Vagas', icon: Briefcase },
   { to: '/aluno/perfil', label: 'Perfil', icon: UserCircle },
@@ -18,9 +19,12 @@ export function StudentSidebar() {
   const liveStudent = useDataStore((s) => s.students.find((x) => x.id === user?.id))
   const programs = useDataStore((s) => s.programs)
   const messages = useDataStore((s) => s.mentorMessages)
+  const activities = useDataStore((s) => s.mentorActivities)
   const activeProgram = liveStudent?.programId ? programs.find((p) => p.id === liveStudent.programId) : undefined
   const unreadCount = getUnreadMessages(messages, user).length
-  const items = baseItems.map((item) => (item.to === '/aluno/duvidas' ? { ...item, badge: unreadCount } : item))
+  const pendingActivities = activities.filter((a) => a.studentId === user?.id && a.status === 'pendente').length
+  const badges: Record<string, number> = { '/aluno/duvidas': unreadCount, '/aluno/atividades': pendingActivities }
+  const items = baseItems.map((item) => (badges[item.to] ? { ...item, badge: badges[item.to] } : item))
 
   return (
     <Sidebar

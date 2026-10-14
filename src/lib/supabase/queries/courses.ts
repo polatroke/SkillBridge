@@ -28,7 +28,8 @@ interface CourseRow {
 
 function toCourse(row: CourseRow): Course {
   const modules: Module[] = [...(row.modules ?? [])]
-    .sort((a, b) => a.position - b.position)
+    // Mesmo critério (position, id) que a RPC complete_lesson usa para numerar os módulos.
+    .sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
     .map((m) => ({ id: m.id, title: m.title, duration: m.duration, lessons: m.lessons ?? [] }))
   return {
     id: row.id,

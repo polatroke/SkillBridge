@@ -1,5 +1,5 @@
 import { supabase } from '../../supabaseClient'
-import type { Job } from '../../../types'
+import type { Job, JobApplication } from '../../../types'
 
 interface JobRow {
   id: string
@@ -89,4 +89,24 @@ export async function updateJobRow(id: string, patch: Partial<Job>) {
 export async function deleteJobRow(id: string) {
   const { error } = await supabase.from('jobs').delete().eq('id', id)
   if (error) throw error
+}
+
+interface JobApplicationRow {
+  id: string
+  job_id: string
+  student_id: string
+  status: JobApplication['status']
+  applied_at: string
+}
+
+export async function fetchJobApplications(): Promise<JobApplication[]> {
+  const { data, error } = await supabase.from('job_applications').select('*')
+  if (error) throw error
+  return (data ?? []).map((row: JobApplicationRow) => ({
+    id: row.id,
+    jobId: row.job_id,
+    studentId: row.student_id,
+    status: row.status,
+    appliedAt: row.applied_at.slice(0, 10),
+  }))
 }

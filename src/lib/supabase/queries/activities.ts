@@ -10,6 +10,11 @@ interface MentorActivityRow {
   due_date: string | null
   status: MentorActivity['status']
   created_at: string
+  submission: string | null
+  submission_url: string | null
+  submitted_at: string | null
+  feedback: string | null
+  reviewed_at: string | null
 }
 
 function toActivity(row: MentorActivityRow): MentorActivity {
@@ -22,6 +27,11 @@ function toActivity(row: MentorActivityRow): MentorActivity {
     dueDate: row.due_date ?? undefined,
     status: row.status,
     createdAt: row.created_at,
+    submission: row.submission ?? undefined,
+    submissionUrl: row.submission_url ?? undefined,
+    submittedAt: row.submitted_at ?? undefined,
+    feedback: row.feedback ?? undefined,
+    reviewedAt: row.reviewed_at ?? undefined,
   }
 }
 
@@ -44,6 +54,15 @@ export async function insertActivityRow(input: { mentorId: string; studentId: st
 
 export async function updateActivityStatusRow(id: string, status: MentorActivity['status']) {
   const { error } = await supabase.from('mentor_activities').update({ status }).eq('id', id)
+  if (error) throw error
+}
+
+/** Revisão do mentor: aprovar (concluida) ou pedir ajustes (pendente), com comentário opcional. */
+export async function reviewActivityRow(id: string, status: Extract<MentorActivity['status'], 'pendente' | 'concluida'>, feedback?: string) {
+  const { error } = await supabase
+    .from('mentor_activities')
+    .update({ status, feedback: feedback?.trim() || null, reviewed_at: new Date().toISOString() })
+    .eq('id', id)
   if (error) throw error
 }
 

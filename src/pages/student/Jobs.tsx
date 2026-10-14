@@ -11,7 +11,15 @@ import { Modal } from '../../components/ui/Modal'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleJobsForStudent, isStudentInProgram } from '../../lib/access'
-import type { Job } from '../../types'
+import { formatDateBR } from '../../lib/date'
+import type { Job, JobApplication } from '../../types'
+
+const applicationBadge: Record<JobApplication['status'], { status: 'agendada' | 'pendente' | 'aprovado' | 'recusado'; label: string }> = {
+  enviada: { status: 'agendada', label: 'Candidatura enviada' },
+  em_analise: { status: 'pendente', label: 'Em análise' },
+  aprovada: { status: 'aprovado', label: 'Aprovada' },
+  recusada: { status: 'recusado', label: 'Não selecionada' },
+}
 
 export default function StudentJobs() {
   const authUser = useAuthStore((s) => s.user)
@@ -19,6 +27,7 @@ export default function StudentJobs() {
   const jobs = useDataStore((s) => s.jobs)
   const companies = useDataStore((s) => s.companies)
   const applyToJob = useDataStore((s) => s.applyToJob)
+  const applications = useDataStore((s) => s.jobApplications)
   const getCompanyById = (id?: string) => companies.find((c) => c.id === id)
   const [applied, setApplied] = useState<Job | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
@@ -69,6 +78,7 @@ export default function StudentJobs() {
         <div className="space-y-4">
           {visibleJobs.map((job) => {
             const company = getCompanyById(job.companyId)
+            const application = applications.find((a) => a.jobId === job.id && a.studentId === student.id)
             return (
               <Card key={job.id} hoverable>
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -94,14 +104,21 @@ export default function StudentJobs() {
                       ))}
                     </ul>
                   </div>
-                  <Button
-                    size="sm"
-                    disabled={job.status !== 'aberta' || applyingId === job.id}
-                    icon={<Send size={14} />}
-                    onClick={() => handleApply(job)}
-                  >
-                    {applyingId === job.id ? 'Enviando...' : 'Candidatar-se'}
-                  </Button>
+                  {application ? (
+                    <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+                      <Badge status={applicationBadge[application.status].status}>{applicationBadge[application.status].label}</Badge>
+                      <span className="text-xs text-slate-400">em {formatDateBR(application.appliedAt)}</span>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={job.status !== 'aberta' || applyingId === job.id}
+                      icon={<Send size={14} />}
+                      onClick={() => handleApply(job)}
+                    >
+                      {applyingId === job.id ? 'Enviando...' : 'Candidatar-se'}
+                    </Button>
+                  )}
                 </div>
               </Card>
             )

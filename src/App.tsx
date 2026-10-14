@@ -7,6 +7,9 @@ import RegisterCompany from './pages/auth/RegisterCompany'
 import StudentDashboard from './pages/student/Dashboard'
 import ExploreCourses from './pages/student/ExploreCourses'
 import CourseDetail from './pages/student/CourseDetail'
+import CoursePlayer from './pages/student/CoursePlayer'
+import Certificate from './pages/student/Certificate'
+import StudentActivities from './pages/student/Activities'
 import Mentorship from './pages/student/Mentorship'
 import StudentDoubts from './pages/student/Doubts'
 import StudentProfile from './pages/student/Profile'
@@ -61,6 +64,30 @@ export default function App() {
         element={
           <ProtectedRoute accountType="student">
             <CourseDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/aluno/cursos/:courseId/aulas"
+        element={
+          <ProtectedRoute accountType="student">
+            <CoursePlayer />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/aluno/certificados/:certificateId"
+        element={
+          <ProtectedRoute accountType="student">
+            <Certificate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/aluno/atividades"
+        element={
+          <ProtectedRoute accountType="student">
+            <StudentActivities />
           </ProtectedRoute>
         }
       />

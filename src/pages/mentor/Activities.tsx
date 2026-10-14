@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { MentorSidebar } from '../../components/layout/MentorSidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -7,11 +7,13 @@ import { Card } from '../../components/ui/Card'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Field'
+import { Input, Textarea } from '../../components/ui/Field'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { Modal } from '../../components/ui/Modal'
 import { useAuthStore } from '../../store/authStore'
 import { useCurrentMentor, useDataStore } from '../../store/dataStore'
-import { formatDateBR } from '../../lib/date'
+import { formatDateBR, formatDateTimeBR } from '../../lib/date'
+import type { MentorActivity } from '../../types'
 
 interface Draft {
   title: string
@@ -30,10 +32,15 @@ export default function MentorActivities() {
   const assignActivity = useDataStore((s) => s.assignActivity)
   const updateActivityStatus = useDataStore((s) => s.updateActivityStatus)
   const deleteActivity = useDataStore((s) => s.deleteActivity)
+  const reviewActivity = useDataStore((s) => s.reviewActivity)
   const getStudentById = (id?: string) => students.find((s) => s.id === id)
 
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [reviewing, setReviewing] = useState<MentorActivity | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const [savingReview, setSavingReview] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   if (!mentor) return null
 
@@ -51,9 +58,29 @@ export default function MentorActivities() {
     setDrafts((d) => ({ ...d, [studentId]: emptyDraft }))
   }
 
+  const openReview = (activity: MentorActivity) => {
+    setReviewing(activity)
+    setFeedback(activity.feedback ?? '')
+    setReviewError(null)
+  }
+
+  const handleReview = async (status: 'pendente' | 'concluida') => {
+    if (!reviewing) return
+    setSavingReview(true)
+    setReviewError(null)
+    try {
+      await reviewActivity(reviewing.id, status, feedback)
+      setReviewing(null)
+    } catch {
+      setReviewError('Não foi possível salvar a revisão. Tente novamente.')
+    } finally {
+      setSavingReview(false)
+    }
+  }
+
   return (
     <DashboardLayout sidebar={<MentorSidebar />} profileTitle="Painel do Mentor">
-      <PageHeader title="Atividades" description="Atribua tarefas aos seus mentorados e acompanhe o que já foi concluído." />
+      <PageHeader title="Atividades" description="Atribua tarefas aos seus mentorados, corrija as entregas e acompanhe o que já foi concluído." />
 
       <div className="space-y-5">
         {studentIds.map((studentId) => {
@@ -110,16 +137,31 @@ export default function MentorActivities() {
                           <CalendarDays size={12} /> Prazo: {formatDateBR(activity.dueDate)}
                         </p>
                       )}
+                      {activity.submission && (
+                        <p className="mt-1.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                          <span className="font-semibold text-slate-600 dark:text-slate-300">Resposta:</span> {activity.submission}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <Badge status={activity.status === 'concluida' ? 'concluido' : 'pendente'} />
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => updateActivityStatus(activity.id, activity.status === 'concluida' ? 'pendente' : 'concluida')}
-                      >
-                        {activity.status === 'concluida' ? 'Reabrir' : 'Concluir'}
-                      </Button>
+                      {activity.status === 'entregue' ? (
+                        <Badge status="agendada">Entregue</Badge>
+                      ) : (
+                        <Badge status={activity.status === 'concluida' ? 'concluido' : 'pendente'} />
+                      )}
+                      {activity.status === 'entregue' ? (
+                        <Button size="sm" onClick={() => openReview(activity)}>
+                          Corrigir
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => updateActivityStatus(activity.id, activity.status === 'concluida' ? 'pendente' : 'concluida')}
+                        >
+                          {activity.status === 'concluida' ? 'Reabrir' : 'Concluir'}
+                        </Button>
+                      )}
                       <button onClick={() => setDeleteId(activity.id)} className="text-slate-300 hover:text-red-500" aria-label="Excluir atividade">
                         <Trash2 size={15} />
                       </button>
@@ -138,6 +180,58 @@ export default function MentorActivities() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={!!reviewing}
+        onClose={() => setReviewing(null)}
+        title={`Corrigir: ${reviewing?.title ?? ''}`}
+        description={reviewing ? `Entrega de ${getStudentById(reviewing.studentId)?.name ?? 'aluno'}` : undefined}
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReviewing(null)}>
+              Cancelar
+            </Button>
+            <Button variant="secondary" disabled={savingReview || !feedback.trim()} onClick={() => handleReview('pendente')}>
+              Pedir ajustes
+            </Button>
+            <Button disabled={savingReview} onClick={() => handleReview('concluida')}>
+              Aprovar
+            </Button>
+          </>
+        }
+      >
+        {reviewing && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-100 px-4 py-3 dark:border-slate-700/60">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                Resposta do aluno{reviewing.submittedAt && ` · ${formatDateTimeBR(reviewing.submittedAt)}`}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{reviewing.submission}</p>
+              {reviewing.submissionUrl && (
+                <a
+                  href={reviewing.submissionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 break-all text-sm font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-300"
+                >
+                  <ExternalLink size={13} /> {reviewing.submissionUrl}
+                </a>
+              )}
+            </div>
+            <Textarea
+              label="Comentário para o aluno"
+              hint="Obrigatório para pedir ajustes; opcional ao aprovar."
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="O que ficou bom e o que pode melhorar..."
+            />
+            {reviewError && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">{reviewError}</p>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <ConfirmDialog
         open={!!deleteId}

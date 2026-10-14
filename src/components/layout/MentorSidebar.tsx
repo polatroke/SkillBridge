@@ -17,8 +17,11 @@ const baseItems: SidebarItem[] = [
 export function MentorSidebar() {
   const user = useAuthStore((s) => s.user)
   const messages = useDataStore((s) => s.mentorMessages)
+  const activities = useDataStore((s) => s.mentorActivities)
   const unreadCount = getUnreadMessages(messages, user).length
-  const items = baseItems.map((item) => (item.to === '/mentor/duvidas' ? { ...item, badge: unreadCount } : item))
+  const toReviewCount = activities.filter((a) => a.mentorId === user?.id && a.status === 'entregue').length
+  const badges: Record<string, number> = { '/mentor/duvidas': unreadCount, '/mentor/atividades': toReviewCount }
+  const items = baseItems.map((item) => (badges[item.to] ? { ...item, badge: badges[item.to] } : item))
 
   return <Sidebar items={items} />
 }

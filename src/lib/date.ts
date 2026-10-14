@@ -1,8 +1,5 @@
 import type { Availability } from '../types'
 
-/** "Hoje" fixo do protótipo, para manter os dados mockados determinísticos. */
-export const TODAY = new Date('2026-08-20T12:00:00')
-
 const weekdayIndex: Record<Availability['weekday'], number> = {
   Segunda: 1,
   Terça: 2,
@@ -12,13 +9,25 @@ const weekdayIndex: Record<Availability['weekday'], number> = {
   Sábado: 6,
 }
 
+/** Data local (YYYY-MM-DD). Não usa toISOString() para não pular de dia por causa do fuso (UTC). */
+export function toISODate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function todayISO(): string {
+  return toISODate(new Date())
+}
+
 /** Retorna a próxima data (YYYY-MM-DD) a partir de hoje que cai no dia da semana informado. */
 export function nextDateForWeekday(weekday: Availability['weekday']): string {
   const target = weekdayIndex[weekday]
-  const date = new Date(TODAY)
+  const date = new Date()
   const diff = (target - date.getDay() + 7) % 7 || 7
   date.setDate(date.getDate() + diff)
-  return date.toISOString().slice(0, 10)
+  return toISODate(date)
 }
 
 export function formatDateBR(iso: string): string {

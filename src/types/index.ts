@@ -163,7 +163,8 @@ export interface ActivityItem {
   date: string
 }
 
-export type MentorActivityStatus = 'pendente' | 'concluida'
+/** pendente → (aluno entrega) → entregue → (mentor aprova) → concluida. Pedir ajustes volta para pendente. */
+export type MentorActivityStatus = 'pendente' | 'entregue' | 'concluida'
 
 /** Atividade/tarefa que um mentor atribui a um mentorado. */
 export interface MentorActivity {
@@ -175,6 +176,31 @@ export interface MentorActivity {
   dueDate?: string
   status: MentorActivityStatus
   createdAt: string
+  /** Resposta enviada pelo aluno. */
+  submission?: string
+  submissionUrl?: string
+  submittedAt?: string
+  /** Comentário do mentor ao revisar a entrega. */
+  feedback?: string
+  reviewedAt?: string
+}
+
+/** Aula concluída pelo aluno. Aulas não têm id: são o índice do módulo (ordem no curso) + índice da aula. */
+export interface LessonProgress {
+  studentId: string
+  courseId: string
+  moduleIndex: number
+  lessonIndex: number
+}
+
+export type JobApplicationStatus = 'enviada' | 'em_analise' | 'recusada' | 'aprovada'
+
+export interface JobApplication {
+  id: string
+  jobId: string
+  studentId: string
+  status: JobApplicationStatus
+  appliedAt: string
 }
 
 /** Mensagem trocada no chat de dúvidas entre mentor e mentorado. */

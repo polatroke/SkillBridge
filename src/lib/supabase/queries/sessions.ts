@@ -37,16 +37,6 @@ export async function fetchMentorSessions(): Promise<MentorSession[]> {
   return (data ?? []).map(toSession)
 }
 
-export async function updateMentorSessionRow(id: string, patch: Partial<{ status: MentorSession['status']; rating: number; review: string }>) {
-  const fields: Record<string, unknown> = {}
-  if (patch.status !== undefined) fields.status = patch.status
-  if (patch.rating !== undefined) fields.rating = patch.rating
-  if (patch.review !== undefined) fields.review = patch.review
-  if (Object.keys(fields).length === 0) return
-  const { error } = await supabase.from('mentor_sessions').update(fields).eq('id', id)
-  if (error) throw error
-}
-
 export async function upsertMentorSessionNotes(sessionId: string, mentorId: string, notes: string) {
   const { error } = await supabase
     .from('mentor_session_notes')

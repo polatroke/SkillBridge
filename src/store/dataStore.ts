@@ -8,6 +8,8 @@ import type {
   Course,
   EnrollmentRequest,
   Job,
+  JobApplication,
+  LessonProgress,
   Mentor,
   MentorActivity,
   MentorInvite,
@@ -21,7 +23,8 @@ import { fetchMentors, updateMentorRow, deleteMentorRow, setMentorProgramsRows, 
 import { fetchCompanies, updateCompanyRow } from '../lib/supabase/queries/companies'
 import { fetchCourses, insertCourseRow, updateCourseRow, deleteCourseRow } from '../lib/supabase/queries/courses'
 import { fetchPrograms, insertProgramRow, updateProgramRow, setProgramStudentsRows } from '../lib/supabase/queries/programs'
-import { fetchJobs, insertJobRow, updateJobRow, deleteJobRow } from '../lib/supabase/queries/jobs'
+import { fetchJobs, fetchJobApplications, insertJobRow, updateJobRow, deleteJobRow } from '../lib/supabase/queries/jobs'
+import { fetchLessonProgress } from '../lib/supabase/queries/progress'
 import {
   fetchEnrollmentRequests,
   updateEnrollmentRequestStatus,
@@ -30,14 +33,18 @@ import {
   touchMentorInviteRow,
   deleteMentorInviteRow,
 } from '../lib/supabase/queries/requests'
-import { fetchMentorSessions, updateMentorSessionRow, upsertMentorSessionNotes, fetchCertificates, fetchActivityItems } from '../lib/supabase/queries/sessions'
-import { fetchMentorActivities, insertActivityRow, updateActivityStatusRow, deleteActivityRow } from '../lib/supabase/queries/activities'
+import { fetchMentorSessions, upsertMentorSessionNotes, fetchCertificates, fetchActivityItems } from '../lib/supabase/queries/sessions'
+import { fetchMentorActivities, insertActivityRow, updateActivityStatusRow, reviewActivityRow, deleteActivityRow } from '../lib/supabase/queries/activities'
 import { fetchMentorMessages, insertMessageRow, markThreadReadRows } from '../lib/supabase/queries/messages'
 import {
   bookMentorSession,
   inviteExistingStudent,
   enrollInCourse as enrollInCourseRequest,
   applyToJob as applyToJobRequest,
+  completeLesson as completeLessonRequest,
+  submitActivity as submitActivityRequest,
+  cancelMentorSession,
+  reviewMentorSession,
 } from '../lib/supabase/rpc'
 import { nextDateForWeekday } from '../lib/date'
 import { useAuthStore } from './authStore'
@@ -49,6 +56,8 @@ interface DataState {
   courses: Course[]
   programs: Program[]
   jobs: Job[]
+  jobApplications: JobApplication[]
+  lessonProgress: LessonProgress[]
   enrollmentRequests: EnrollmentRequest[]
   mentorInvites: MentorInvite[]
   mentorSessions: MentorSession[]
@@ -72,6 +81,8 @@ interface DataState {
   updateCourse: (id: string, course: Partial<Course>) => Promise<void>
   deleteCourse: (id: string) => Promise<void>
   enrollInCourse: (courseId: string) => Promise<void>
+  /** Marca a aula como concluída. `courseCompleted` = essa foi a última aula e o certificado foi emitido. */
+  completeLesson: (courseId: string, moduleIndex: number, lessonIndex: number) => Promise<{ courseCompleted: boolean }>
 
   // -------- Mentores (Empresa + Mentor) -------------------------------------
   addMentorDirect: (mentor: Omit<Mentor, 'id' | 'type' | 'rating' | 'reviewsCount' | 'availability'>) => Promise<void>
@@ -105,10 +116,13 @@ interface DataState {
   setMentorAvailability: (mentorId: string, availability: Mentor['availability']) => Promise<void>
   completeSessionFeedback: (sessionId: string, notes: string) => Promise<void>
   addSessionReview: (sessionId: string, rating: number, review: string) => Promise<void>
+  cancelSession: (sessionId: string) => Promise<void>
 
   // -------- Atividades do mentor (Mentor + Aluno) ----------------------------
   assignActivity: (studentId: string, title: string, description?: string, dueDate?: string) => Promise<void>
   updateActivityStatus: (activityId: string, status: MentorActivity['status']) => Promise<void>
+  submitActivity: (activityId: string, answer: string, url?: string) => Promise<void>
+  reviewActivity: (activityId: string, status: 'pendente' | 'concluida', feedback?: string) => Promise<void>
   deleteActivity: (activityId: string) => Promise<void>
 
   // -------- Dúvidas / chat (Mentor + Aluno) -----------------------------------
@@ -123,6 +137,8 @@ const fetchers = {
   courses: fetchCourses,
   programs: fetchPrograms,
   jobs: fetchJobs,
+  jobApplications: fetchJobApplications,
+  lessonProgress: fetchLessonProgress,
   enrollmentRequests: fetchEnrollmentRequests,
   mentorInvites: fetchMentorInvites,
   mentorSessions: fetchMentorSessions,
@@ -177,6 +193,8 @@ export const useDataStore = create<DataState>((set) => ({
   courses: [],
   programs: [],
   jobs: [],
+  jobApplications: [],
+  lessonProgress: [],
   enrollmentRequests: [],
   mentorInvites: [],
   mentorSessions: [],
@@ -200,6 +218,8 @@ export const useDataStore = create<DataState>((set) => ({
       courses: [],
       programs: [],
       jobs: [],
+      jobApplications: [],
+      lessonProgress: [],
       enrollmentRequests: [],
       mentorInvites: [],
       mentorSessions: [],
@@ -246,6 +266,12 @@ export const useDataStore = create<DataState>((set) => ({
   enrollInCourse: async (courseId) => {
     await enrollInCourseRequest(courseId)
     await refetch(['courses', 'students', 'activityItems'])
+  },
+
+  completeLesson: async (courseId, moduleIndex, lessonIndex) => {
+    const result = await completeLessonRequest(courseId, moduleIndex, lessonIndex)
+    await refetch(result.course_completed ? ['lessonProgress', 'students', 'certificates', 'activityItems'] : ['lessonProgress'])
+    return { courseCompleted: result.course_completed }
   },
 
   addMentorDirect: async () => {
@@ -323,7 +349,7 @@ export const useDataStore = create<DataState>((set) => ({
 
   applyToJob: async (jobId) => {
     await applyToJobRequest(jobId)
-    await refetch(['jobs'])
+    await refetch(['jobs', 'jobApplications'])
   },
 
   updateCompanyProfile: async (companyId, patch) => {
@@ -352,8 +378,13 @@ export const useDataStore = create<DataState>((set) => ({
   },
 
   addSessionReview: async (sessionId, rating, review) => {
-    await updateMentorSessionRow(sessionId, { rating, review, status: 'concluida' })
-    await refetch(['mentorSessions'])
+    await reviewMentorSession(sessionId, rating, review)
+    await refetch(['mentorSessions', 'mentors', 'activityItems'])
+  },
+
+  cancelSession: async (sessionId) => {
+    await cancelMentorSession(sessionId)
+    await refetch(['mentorSessions', 'mentors'])
   },
 
   assignActivity: async (studentId, title, description, dueDate) => {
@@ -365,6 +396,16 @@ export const useDataStore = create<DataState>((set) => ({
 
   updateActivityStatus: async (activityId, status) => {
     await updateActivityStatusRow(activityId, status)
+    await refetch(['mentorActivities'])
+  },
+
+  submitActivity: async (activityId, answer, url) => {
+    await submitActivityRequest(activityId, answer, url)
+    await refetch(['mentorActivities'])
+  },
+
+  reviewActivity: async (activityId, status, feedback) => {
+    await reviewActivityRow(activityId, status, feedback)
     await refetch(['mentorActivities'])
   },
 

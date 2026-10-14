@@ -23,3 +23,31 @@ export async function inviteExistingStudent(programId: string, email: string) {
   if (error) throw error
   return data
 }
+
+export async function completeLesson(courseId: string, moduleIndex: number, lessonIndex: number) {
+  const { data, error } = await supabase.rpc('complete_lesson', {
+    p_course_id: courseId,
+    p_module_index: moduleIndex,
+    p_lesson_index: lessonIndex,
+  })
+  if (error) throw error
+  return data as { done: number; total: number; course_completed: boolean }
+}
+
+export async function submitActivity(activityId: string, answer: string, url?: string) {
+  const { data, error } = await supabase.rpc('submit_activity', { p_activity_id: activityId, p_answer: answer, p_url: url ?? null })
+  if (error) throw error
+  return data
+}
+
+export async function cancelMentorSession(sessionId: string) {
+  const { data, error } = await supabase.rpc('cancel_mentor_session', { p_session_id: sessionId })
+  if (error) throw error
+  return data
+}
+
+export async function reviewMentorSession(sessionId: string, rating: number, review: string) {
+  const { data, error } = await supabase.rpc('review_mentor_session', { p_session_id: sessionId, p_rating: rating, p_review: review })
+  if (error) throw error
+  return data
+}
