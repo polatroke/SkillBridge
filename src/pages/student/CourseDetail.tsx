@@ -4,7 +4,7 @@ import { Award, BookOpen, Building2, CheckCircle2, ChevronDown, Clock, Lock, Pla
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Avatar } from '../../components/ui/Avatar'
 import { CourseCover } from '../../components/ui/CourseCover'
@@ -12,6 +12,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useCurrentStudent, useDataStore } from '../../store/dataStore'
 import { canStudentAccessCourse } from '../../lib/access'
 import { getCourseProgress } from '../../lib/progress'
+import { friendlyError } from '../../lib/errors'
 
 export default function CourseDetail() {
   const { courseId } = useParams()
@@ -23,7 +24,8 @@ export default function CourseDetail() {
   const lessonProgress = useDataStore((s) => s.lessonProgress)
   const certificates = useDataStore((s) => s.certificates)
   const getCompanyById = (id?: string) => companies.find((c) => c.id === id)
-  const [openModule, setOpenModule] = useState<string | null>(course?.modules[0]?.id ?? null)
+  // undefined = ainda não mexeu: abre o primeiro módulo (o curso pode chegar depois do 1º render, num F5).
+  const [openModuleState, setOpenModule] = useState<string | null | undefined>(undefined)
   const [enrolling, setEnrolling] = useState(false)
   const [enrollError, setEnrollError] = useState<string | null>(null)
 
@@ -44,11 +46,9 @@ export default function CourseDetail() {
           title="Curso exclusivo de treinamento corporativo"
           description={`Este curso pertence ao treinamento de ${company?.name ?? 'uma empresa'} e só fica visível para alunos vinculados a esse programa.`}
           action={
-            <Link to="/aluno/cursos">
-              <Button variant="secondary" size="sm">
+            <ButtonLink to="/aluno/cursos" variant="secondary" size="sm">
                 Voltar para o catálogo
-              </Button>
-            </Link>
+              </ButtonLink>
           }
         />
       </DashboardLayout>
@@ -56,6 +56,7 @@ export default function CourseDetail() {
   }
 
   const company = getCompanyById(course.companyId)
+  const openModule = openModuleState === undefined ? (course.modules[0]?.id ?? null) : openModuleState
   const isEnrolled = student.enrolledCourseIds.includes(course.id)
   const isCompleted = student.completedCourseIds.includes(course.id)
   const progress = getCourseProgress(course, student, lessonProgress)
@@ -167,11 +168,9 @@ export default function CourseDetail() {
                 <p className="mt-1.5 text-xs text-slate-400">
                   {progress.percent}% concluído · {progress.done} de {progress.total} aulas
                 </p>
-                <Link to={`/aluno/cursos/${course.id}/aulas`}>
-                  <Button fullWidth className="mt-4" icon={<PlayCircle size={16} />} disabled={progress.total === 0}>
+                <ButtonLink to={`/aluno/cursos/${course.id}/aulas`} fullWidth className="mt-4" icon={<PlayCircle size={16} />} disabled={progress.total === 0}>
                     {isCompleted ? 'Revisar curso' : progress.done > 0 ? 'Continuar curso' : 'Começar curso'}
-                  </Button>
-                </Link>
+                  </ButtonLink>
               </>
             ) : (
               <>
@@ -183,8 +182,8 @@ export default function CourseDetail() {
                     setEnrollError(null)
                     try {
                       await enrollInCourse(course.id)
-                    } catch {
-                      setEnrollError('Não foi possível concluir a matrícula. Tente novamente.')
+                    } catch (err) {
+                      setEnrollError(friendlyError(err, 'Não foi possível concluir a matrícula. Tente novamente.'))
                     } finally {
                       setEnrolling(false)
                     }
@@ -219,11 +218,9 @@ export default function CourseDetail() {
                   <p className="text-xs text-primary-600">Você concluiu este curso</p>
                 </div>
               </div>
-              <Link to={`/aluno/certificados/${certificate.id}`}>
-                <Button variant="secondary" fullWidth size="sm" className="mt-4">
+              <ButtonLink to={`/aluno/certificados/${certificate.id}`} variant="secondary" fullWidth size="sm" className="mt-4">
                   Ver certificado
-                </Button>
-              </Link>
+                </ButtonLink>
             </Card>
           )}
         </div>

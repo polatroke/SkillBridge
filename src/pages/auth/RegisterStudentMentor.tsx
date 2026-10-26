@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GraduationCap, MailCheck, Users } from 'lucide-react'
 import { PublicLayout } from '../../components/layout/PublicLayout'
 import { Card } from '../../components/ui/Card'
@@ -7,13 +7,17 @@ import { Button } from '../../components/ui/Button'
 import { Input, Textarea } from '../../components/ui/Field'
 import { signUpMentor, signUpStudent } from '../../lib/supabase/auth'
 import { useAuthStore } from '../../store/authStore'
+import { friendlyError } from '../../lib/errors'
+import { cleanName } from '../../lib/validation'
 
 type Kind = 'student' | 'mentor'
 
 export default function RegisterStudentMentor() {
-  const [kind, setKind] = useState<Kind>('student')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  // Link de convite de mentor: /cadastro?tipo=mentor&email=...&nome=... já abre o formulário preenchido.
+  const [searchParams] = useSearchParams()
+  const [kind, setKind] = useState<Kind>(searchParams.get('tipo') === 'mentor' ? 'mentor' : 'student')
+  const [name, setName] = useState(searchParams.get('nome') ?? '')
+  const [email, setEmail] = useState(searchParams.get('email') ?? '')
   const [password, setPassword] = useState('')
   const [bio, setBio] = useState('')
   const [skills, setSkills] = useState('')
@@ -27,16 +31,21 @@ export default function RegisterStudentMentor() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    const cleanedName = cleanName(name)
+    if (!cleanedName) {
+      setError('Informe seu nome completo.')
+      return
+    }
     setSubmitting(true)
     try {
       const outcome =
         kind === 'student'
-          ? await signUpStudent(name, email, password)
+          ? await signUpStudent(cleanedName, email, password)
           : await signUpMentor(
-              name,
+              cleanedName,
               email,
               password,
-              bio || 'Mentor(a) na plataforma SkillBridge.',
+              bio.trim() || 'Mentor(a) na plataforma SkillBridge.',
               skills
                 .split(',')
                 .map((s) => s.trim())
@@ -49,7 +58,7 @@ export default function RegisterStudentMentor() {
       await refresh()
       navigate(kind === 'student' ? '/aluno' : '/mentor')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível criar a conta. Tente novamente.')
+      setError(friendlyError(err, 'Não foi possível criar a conta. Tente novamente.'))
     } finally {
       setSubmitting(false)
     }
@@ -107,7 +116,17 @@ export default function RegisterStudentMentor() {
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <Input label="Nome completo" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} required />
             <Input label="E-mail" type="email" placeholder="voce@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <Input label="Senha" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+            <Input
+              label="Senha"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              autoComplete="new-password"
+              hint="Mínimo de 6 caracteres."
+            />
 
             {kind === 'mentor' && (
               <>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Building2, GraduationCap, Users } from 'lucide-react'
 import { PublicLayout } from '../../components/layout/PublicLayout'
 import { Card } from '../../components/ui/Card'
@@ -7,11 +7,13 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Field'
 import { useAuthStore } from '../../store/authStore'
 import type { AccountType } from '../../types'
+import { accountTypeForPath, homePathFor } from '../../lib/routes'
+import { friendlyError } from '../../lib/errors'
 
-const typeConfig: Record<AccountType, { label: string; icon: typeof GraduationCap; redirect: string }> = {
-  student: { label: 'Aluno', icon: GraduationCap, redirect: '/aluno' },
-  mentor: { label: 'Mentor', icon: Users, redirect: '/mentor' },
-  company: { label: 'Empresa', icon: Building2, redirect: '/empresa' },
+const typeConfig: Record<AccountType, { label: string; icon: typeof GraduationCap }> = {
+  student: { label: 'Aluno', icon: GraduationCap },
+  mentor: { label: 'Mentor', icon: Users },
+  company: { label: 'Empresa', icon: Building2 },
 }
 
 const demoAccounts: { type: AccountType; label: string; value: string; hint: string }[] = [
@@ -26,31 +28,38 @@ const demoAccounts: { type: AccountType; label: string; value: string; hint: str
 const DEMO_PASSWORD = 'SkillBridge#2026'
 
 export default function Login() {
-  const [type, setType] = useState<AccountType>('student')
+  // Quem chega de um link protegido (ex: card de curso na tela inicial) volta para lá depois de entrar.
+  const rawFrom = (useLocation().state as { from?: string } | null)?.from
+  // Só caminhos internos do próprio app (evita redirecionar para "//outro-site").
+  const from = rawFrom && rawFrom.startsWith('/') && !rawFrom.startsWith('//') ? rawFrom : undefined
+  const fromType = accountTypeForPath(from)
+  const [type, setType] = useState<AccountType>(fromType ?? 'student')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const login = useAuthStore((s) => s.login)
+  const loggedType = useAuthStore((s) => s.accountType)
+  const authLoading = useAuthStore((s) => s.loading)
   const navigate = useNavigate()
 
   const config = typeConfig[type]
+
+  // Já está logado (ex: voltou para /login pelo histórico): segue para o painel em vez de pedir login de novo.
+  if (!authLoading && loggedType && !submitting) {
+    return <Navigate to={from && fromType === loggedType ? from : homePathFor(loggedType)} replace />
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
     try {
-      const user = await login(email, password)
-      if (!user) {
-        setError('E-mail ou senha inválidos.')
-        return
-      }
-      // Redireciona pelo painel correspondente ao tipo real da conta (não pela aba escolhida) —
-      // login é sempre por e-mail/senha, a aba é só um atalho de preenchimento.
-      navigate(typeConfig[user.type].redirect)
-    } catch {
-      setError('E-mail ou senha inválidos.')
+      // A aba escolhida é obrigatória: uma conta de mentor não entra pela aba Aluno/Empresa.
+      await login(email, password, type)
+      navigate(from && fromType === type ? from : homePathFor(type), { replace: true })
+    } catch (err) {
+      setError(friendlyError(err, 'Não foi possível entrar agora. Tente novamente.'))
     } finally {
       setSubmitting(false)
     }
@@ -94,7 +103,9 @@ export default function Login() {
 
         <Card padding="lg" className="w-full max-w-md">
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-slate-50">Entrar na SkillBridge</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Escolha o tipo de conta para continuar.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {fromType ? `Entre com sua conta de ${typeConfig[fromType].label} para continuar de onde parou.` : 'Escolha o tipo de conta para continuar.'}
+          </p>
 
           <div className="mt-6 grid grid-cols-3 gap-2">
             {(Object.keys(typeConfig) as AccountType[]).map((t) => {

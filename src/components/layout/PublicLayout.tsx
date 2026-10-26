@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { GraduationCap, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { Footer } from './Footer'
-import { Button } from '../ui/Button'
+import { ButtonLink } from '../ui/Button'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import logo from '../../assets/logo.svg'
 
 /** Layout para telas públicas/institucionais (Landing, Login, Cadastro). Sempre fecha com Footer. */
 export function PublicLayout({ children }: { children: ReactNode }) {
@@ -15,9 +16,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-primary-100/70 bg-surface/90 backdrop-blur dark:border-slate-800">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-              <GraduationCap size={20} />
-            </div>
+            <img src={logo} alt="" className="h-9 w-auto" />
             <span className="text-lg font-extrabold text-slate-900 dark:text-slate-50">SkillBridge</span>
           </Link>
 
@@ -38,16 +37,12 @@ export function PublicLayout({ children }: { children: ReactNode }) {
 
           <div className="hidden items-center gap-2 md:flex">
             <ThemeToggle />
-            <Link to="/login">
-              <Button variant="ghost" size="sm">
+            <ButtonLink to="/login" variant="ghost" size="sm">
                 Entrar
-              </Button>
-            </Link>
-            <Link to="/cadastro">
-              <Button variant="cta" size="sm">
+              </ButtonLink>
+            <ButtonLink to="/cadastro" variant="cta" size="sm">
                 Criar conta grátis
-              </Button>
-            </Link>
+              </ButtonLink>
           </div>
 
           <div className="flex items-center gap-1 md:hidden">
@@ -73,16 +68,12 @@ export function PublicLayout({ children }: { children: ReactNode }) {
               Depoimentos
             </Link>
             <div className="mt-3 flex gap-3">
-              <Link to="/login" className="flex-1">
-                <Button variant="secondary" size="sm" fullWidth>
+              <ButtonLink to="/login" className="flex-1" variant="secondary" size="sm" fullWidth>
                   Entrar
-                </Button>
-              </Link>
-              <Link to="/cadastro" className="flex-1">
-                <Button variant="cta" size="sm" fullWidth>
+                </ButtonLink>
+              <ButtonLink to="/cadastro" className="flex-1" variant="cta" size="sm" fullWidth>
                   Criar conta
-                </Button>
-              </Link>
+                </ButtonLink>
             </div>
           </div>
         )}

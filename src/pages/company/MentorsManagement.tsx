@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Mail, RefreshCcw, Search, Trash2, UserPlus } from 'lucide-react'
+import { Check, Copy, Mail, Search, Trash2, UserPlus } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { CompanySidebar } from '../../components/layout/CompanySidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -14,6 +14,8 @@ import { MultiSelect } from '../../components/ui/MultiSelect'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
 import { formatDateBR } from '../../lib/date'
+import { friendlyError } from '../../lib/errors'
+import { cleanName } from '../../lib/validation'
 
 type FormMode = 'invite' | 'direct' | null
 
@@ -39,9 +41,15 @@ export default function MentorsManagement() {
   const [skills, setSkills] = useState('')
   const [bio, setBio] = useState('')
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([])
+  const [password, setPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [copiedInvite, setCopiedInvite] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const companyMentors = mentors.filter((m) => m.companyId === companyId)
-  const companyInvites = invites.filter((i) => i.companyId === companyId)
+  // Convite aceito vira mentor da lista acima — só os pendentes aparecem como convite.
+  const companyInvites = invites.filter((i) => i.companyId === companyId && i.status === 'pendente')
 
   const filteredMentors = companyMentors.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
   const filteredInvites = companyInvites.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
@@ -51,35 +59,100 @@ export default function MentorsManagement() {
     setEmail('')
     setSkills('')
     setBio('')
+    setPassword('')
     setSelectedPrograms([])
+    setFormError(null)
     setFormMode(null)
+  }
+
+  /** Fechar pelo usuário (Cancelar, X, Esc) não pode interromper um envio em andamento. */
+  const closeForm = () => {
+    if (!saving) resetForm()
+  }
+
+  const emailInUse = (value: string) => {
+    const e = value.trim().toLowerCase()
+    return companyMentors.some((m) => m.email.toLowerCase() === e) || companyInvites.some((i) => i.email.toLowerCase() === e)
+  }
+
+  const runForm = async (action: () => Promise<void>, fallback: string) => {
+    setSaving(true)
+    setFormError(null)
+    try {
+      await action()
+      setSaving(false)
+      resetForm()
+    } catch (err) {
+      setSaving(false)
+      setFormError(friendlyError(err, fallback))
+    }
   }
 
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    inviteMentorByEmail(companyId, name, email)
-    resetForm()
+    const cleanedName = cleanName(name)
+    if (!cleanedName) {
+      setFormError('Informe o nome do mentor.')
+      return
+    }
+    if (emailInUse(email)) {
+      setFormError('Esse e-mail já é de um mentor ou de um convite pendente da sua empresa.')
+      return
+    }
+    void runForm(() => inviteMentorByEmail(companyId, cleanedName, email.trim().toLowerCase()), 'Não foi possível criar o convite. Tente novamente.')
   }
 
   const handleDirectSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    addMentorDirect({
-      name,
-      email,
-      bio: bio || 'Mentor(a) cadastrado(a) diretamente pela empresa.',
-      skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
-      pricePerSession: 0,
-      companyId,
-      programIds: selectedPrograms,
-    })
-    resetForm()
+    const cleanedName = cleanName(name)
+    if (!cleanedName) {
+      setFormError('Informe o nome do mentor.')
+      return
+    }
+    if (emailInUse(email)) {
+      setFormError('Esse e-mail já é de um mentor ou de um convite pendente da sua empresa.')
+      return
+    }
+    void runForm(
+      () =>
+        addMentorDirect({
+          name: cleanedName,
+          email: email.trim().toLowerCase(),
+          password,
+          bio: bio.trim() || 'Mentor(a) cadastrado(a) diretamente pela empresa.',
+          skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
+          programIds: selectedPrograms,
+        }),
+      'Não foi possível cadastrar o mentor. Tente novamente.'
+    )
+  }
+
+  /** O sistema não envia e-mail: copia um convite pronto (com link de cadastro preenchido) para o admin mandar. */
+  const copyInvite = async (inviteId: string, inviteName: string, inviteEmail: string) => {
+    setActionError(null)
+    const link = `${window.location.origin}/cadastro?tipo=mentor&email=${encodeURIComponent(inviteEmail)}&nome=${encodeURIComponent(inviteName)}`
+    const company = authUser?.name ?? 'Nossa empresa'
+    const text = `Olá, ${inviteName}! A ${company} convidou você para ser mentor(a) na SkillBridge. Crie sua conta de mentor com o e-mail ${inviteEmail} neste link: ${link} — assim que entrar, você já fica vinculado(a) à empresa.`
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Sem permissão de área de transferência (ou fora de HTTPS): mostra o texto para copiar à mão.
+      window.prompt('Copie o convite abaixo e envie para o mentor:', text)
+    }
+    try {
+      await resendMentorInvite(inviteId)
+      setCopiedInvite(inviteId)
+      setTimeout(() => setCopiedInvite((id) => (id === inviteId ? null : id)), 2500)
+    } catch (err) {
+      setActionError(friendlyError(err, 'O convite foi copiado, mas não foi possível registrar a data do envio.'))
+    }
   }
 
   return (
     <DashboardLayout sidebar={<CompanySidebar />} profileTitle="Painel da Empresa">
       <PageHeader
         title="Gestão de Mentores"
-        description="Convide mentores por e-mail ou cadastre diretamente. Mentores só aparecem para alunos dos treinamentos vinculados."
+        description="Convide mentores ou cadastre o login deles direto. Mentores só aparecem para alunos dos treinamentos vinculados."
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" icon={<Mail size={16} />} onClick={() => setFormMode('invite')}>
@@ -102,6 +175,7 @@ export default function MentorsManagement() {
         />
       </div>
 
+      {actionError && <p className="mb-4 text-sm font-semibold text-red-600 dark:text-red-400">{actionError}</p>}
       <Card padding="none" className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -173,10 +247,19 @@ export default function MentorsManagement() {
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => resendMentorInvite(inv.id)}
-                        className="flex items-center gap-1 rounded-lg bg-primary-50 dark:bg-primary-500/10 px-2.5 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-100"
+                        onClick={() => copyInvite(inv.id, inv.name, inv.email)}
+                        title="Copia uma mensagem de convite com o link de cadastro para você enviar ao mentor"
+                        className="flex items-center gap-1 rounded-lg bg-primary-50 dark:bg-primary-500/10 px-2.5 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-500/20"
                       >
-                        <RefreshCcw size={13} /> Reenviar
+                        {copiedInvite === inv.id ? (
+                          <>
+                            <Check size={13} /> Convite copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} /> Copiar convite
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={() => setToRemove({ type: 'invite', id: inv.id, name: inv.name })}
@@ -199,48 +282,60 @@ export default function MentorsManagement() {
       {/* Convidar por e-mail */}
       <Modal
         open={formMode === 'invite'}
-        onClose={resetForm}
+        onClose={closeForm}
         title="Convidar mentor por e-mail"
-        description="Um convite pendente será criado. Ele passa a aparecer como mentor ativo assim que aceitar."
+        description="Criamos um convite pendente para esse e-mail. Depois use “Copiar convite” e envie o link para a pessoa: quando ela criar a conta de mentor com esse e-mail, já entra vinculada à sua empresa."
         footer={
           <>
-            <Button variant="ghost" onClick={resetForm}>
+            <Button variant="ghost" onClick={closeForm} disabled={saving}>
               Cancelar
             </Button>
-            <Button icon={<Mail size={15} />} onClick={handleInviteSubmit}>
-              Enviar convite
+            <Button type="submit" form="invite-mentor-form" icon={<Mail size={15} />} disabled={saving}>
+              {saving ? 'Criando...' : 'Criar convite'}
             </Button>
           </>
         }
       >
-        <form className="space-y-4" onSubmit={handleInviteSubmit}>
+        <form id="invite-mentor-form" className="space-y-4" onSubmit={handleInviteSubmit}>
           <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do mentor" required />
           <Input label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mentor@email.com" required />
+          {formError && <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formError}</p>}
         </form>
       </Modal>
 
       {/* Cadastro direto */}
       <Modal
         open={formMode === 'direct'}
-        onClose={resetForm}
+        onClose={closeForm}
         title="Cadastrar mentor diretamente"
+        description="Cria o login do mentor já vinculado à sua empresa. Depois, envie para ele o e-mail e a senha provisória."
         size="lg"
         footer={
           <>
-            <Button variant="ghost" onClick={resetForm}>
+            <Button variant="ghost" onClick={closeForm} disabled={saving}>
               Cancelar
             </Button>
-            <Button icon={<UserPlus size={15} />} onClick={handleDirectSubmit}>
-              Cadastrar mentor
+            <Button type="submit" form="direct-mentor-form" icon={<UserPlus size={15} />} disabled={saving}>
+              {saving ? 'Cadastrando...' : 'Cadastrar mentor'}
             </Button>
           </>
         }
       >
-        <form className="space-y-4" onSubmit={handleDirectSubmit}>
+        <form id="direct-mentor-form" className="space-y-4" onSubmit={handleDirectSubmit}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" required />
             <Input label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mentor@empresa.com" required />
           </div>
+          <Input
+            label="Senha provisória"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            autoComplete="new-password"
+            hint="Mínimo de 8 caracteres. O mentor entra com ela pela aba Mentor."
+            required
+          />
           <Input
             label="Especialidades / skills"
             value={skills}
@@ -256,19 +351,24 @@ export default function MentorsManagement() {
             hint="O mentor só aparece para alunos vinculados a esses treinamentos."
             emptyLabel="Crie um treinamento primeiro em Gestão de Treinamentos."
           />
+          {formError && <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formError}</p>}
         </form>
       </Modal>
 
       <ConfirmDialog
         open={!!toRemove}
         onClose={() => setToRemove(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!toRemove) return
-          if (toRemove.type === 'mentor') removeMentor(toRemove.id)
-          else removeMentorInvite(toRemove.id)
+          if (toRemove.type === 'mentor') await removeMentor(toRemove.id)
+          else await removeMentorInvite(toRemove.id)
         }}
         title={`Remover ${toRemove?.name}?`}
-        description="Essa pessoa deixará de aparecer para os alunos dos seus treinamentos."
+        description={
+          toRemove?.type === 'mentor'
+            ? 'O mentor deixa de ser vinculado à sua empresa e aos seus treinamentos. A conta dele e o histórico de mentorias com os alunos são mantidos.'
+            : 'O convite pendente será apagado; o link enviado deixa de vincular a pessoa à sua empresa.'
+        }
         confirmLabel="Remover"
         danger
       />

@@ -3,6 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
 import type {
   ActivityItem,
+  Availability,
   Certificate,
   Company,
   Course,
@@ -19,7 +20,7 @@ import type {
   Student,
 } from '../types'
 import { fetchStudents, updateStudentRow } from '../lib/supabase/queries/students'
-import { fetchMentors, updateMentorRow, deleteMentorRow, setMentorProgramsRows, replaceMentorAvailabilityRows } from '../lib/supabase/queries/mentors'
+import { fetchMentors, updateMentorRow, insertAvailabilityRow, deleteAvailabilityRow } from '../lib/supabase/queries/mentors'
 import { fetchCompanies, updateCompanyRow } from '../lib/supabase/queries/companies'
 import { fetchCourses, insertCourseRow, updateCourseRow, deleteCourseRow } from '../lib/supabase/queries/courses'
 import { fetchPrograms, insertProgramRow, updateProgramRow, setProgramStudentsRows } from '../lib/supabase/queries/programs'
@@ -45,8 +46,12 @@ import {
   submitActivity as submitActivityRequest,
   cancelMentorSession,
   reviewMentorSession,
+  unlinkCompanyMentor,
+  releasePastSessionSlots,
 } from '../lib/supabase/rpc'
+import { callCompanyUsers } from '../lib/supabase/companyUsers'
 import { nextDateForWeekday } from '../lib/date'
+import { friendlyError, userError } from '../lib/errors'
 import { useAuthStore } from './authStore'
 
 interface DataState {
@@ -67,6 +72,8 @@ interface DataState {
   mentorMessages: MentorMessage[]
   /** true depois que a primeira carga (pós-login) terminou. */
   dataLoaded: boolean
+  /** Mensagem da última carga que falhou (as telas mostram "tentar novamente" em vez de ficar em branco). */
+  loadError: string | null
 
   fetchAll: () => Promise<void>
   clear: () => void
@@ -75,6 +82,9 @@ interface DataState {
   approveRequest: (requestId: string) => Promise<void>
   rejectRequest: (requestId: string) => Promise<void>
   inviteStudentByEmail: (programId: string, email: string) => Promise<void>
+
+  // -------- Perfil do aluno ----------------------------------------------------
+  updateStudentProfile: (studentId: string, patch: { name?: string; bio?: string }) => Promise<void>
 
   // -------- Cursos (Empresa + Aluno) ---------------------------------------
   addCourse: (course: Omit<Course, 'id' | 'enrolledCount' | 'rating'>) => Promise<void>
@@ -85,16 +95,17 @@ interface DataState {
   completeLesson: (courseId: string, moduleIndex: number, lessonIndex: number) => Promise<{ courseCompleted: boolean }>
 
   // -------- Mentores (Empresa + Mentor) -------------------------------------
-  addMentorDirect: (mentor: Omit<Mentor, 'id' | 'type' | 'rating' | 'reviewsCount' | 'availability'>) => Promise<void>
+  /** Cria o login do mentor já vinculado à empresa (Edge Function company-users). */
+  addMentorDirect: (input: { name: string; email: string; password: string; bio: string; skills: string[]; programIds: string[] }) => Promise<void>
   inviteMentorByEmail: (companyId: string, name: string, email: string) => Promise<void>
   resendMentorInvite: (inviteId: string) => Promise<void>
   removeMentor: (mentorId: string) => Promise<void>
   removeMentorInvite: (inviteId: string) => Promise<void>
-  updateMentorPrograms: (mentorId: string, programIds: string[]) => Promise<void>
   updateMentorProfile: (mentorId: string, patch: { bio?: string; pricePerSession?: number; skills?: string[] }) => Promise<void>
 
   // -------- Treinamentos (Empresa) -----------------------------------------
-  addProgram: (program: Omit<Program, 'id'>) => Promise<void>
+  /** Devolve o id do treinamento criado. */
+  addProgram: (program: Omit<Program, 'id'>) => Promise<string>
   updateProgram: (id: string, program: Partial<Program>) => Promise<void>
   setProgramStudents: (programId: string, studentIds: string[]) => Promise<void>
 
@@ -110,10 +121,14 @@ interface DataState {
     companyId: string,
     patch: Partial<{ name: string; razaoSocial: string; sector: string; email: string; logoUrl: string }>
   ) => Promise<void>
+  /** Cria o login de outro administrador da empresa logada (Edge Function company-users). */
+  addCompanyAdmin: (input: { name: string; email: string; password: string; role: string }) => Promise<void>
+  removeCompanyAdmin: (adminId: string) => Promise<void>
 
   // -------- Mentoria (Aluno + Mentor) ---------------------------------------
   bookSession: (mentorId: string, studentId: string, availabilityId: string, topic: string) => Promise<void>
-  setMentorAvailability: (mentorId: string, availability: Mentor['availability']) => Promise<void>
+  addAvailabilitySlot: (mentorId: string, slot: Pick<Availability, 'weekday' | 'start' | 'end'>) => Promise<void>
+  removeAvailabilitySlot: (slotId: string) => Promise<void>
   completeSessionFeedback: (sessionId: string, notes: string) => Promise<void>
   addSessionReview: (sessionId: string, rating: number, review: string) => Promise<void>
   cancelSession: (sessionId: string) => Promise<void>
@@ -150,40 +165,90 @@ const fetchers = {
 
 type SliceKey = keyof typeof fetchers
 
-async function refetch(keys: SliceKey[]) {
-  const entries = await Promise.all(keys.map(async (k) => [k, await fetchers[k]()] as const))
-  useDataStore.setState(Object.fromEntries(entries))
+/**
+ * Incrementado a cada carga completa e a cada `clear()` (logout). Respostas que chegam depois de
+ * uma troca de conta são descartadas — senão os dados do usuário anterior voltavam para a tela.
+ */
+let dataSeq = 0
+/** Carga completa em andamento: chamadas repetidas (restauração da sessão + evento INITIAL_SESSION) reaproveitam a mesma. */
+let fetchAllInFlight: Promise<void> | null = null
+
+async function loadSlices(keys: SliceKey[]) {
+  return Object.fromEntries(await Promise.all(keys.map(async (k) => [k, await fetchers[k]()] as const)))
 }
 
+async function refetch(keys: SliceKey[]) {
+  const seq = dataSeq
+  const slices = await loadSlices(keys)
+  if (seq === dataSeq) useDataStore.setState(slices)
+}
+
+/**
+ * O usuário logado (authStore) é uma cópia carregada no login: depois de editar o próprio
+ * perfil, atualiza essa cópia também, senão topo e telas que leem dela mostram o dado antigo.
+ */
+function syncAuthUser(fresh: Student | Company | undefined) {
+  const current = useAuthStore.getState().user
+  if (fresh && current && current.id === fresh.id && current.type === fresh.type) useAuthStore.setState({ user: fresh })
+}
+
+const MESSAGES_TOPIC_PREFIX = 'mentor-messages-'
 let messagesChannel: RealtimeChannel | null = null
+/** Quem o canal atual escuta (`coluna:usuário`): evita recriar o canal a cada evento de sessão. */
+let messagesChannelKey: string | null = null
+let channelSeq = 0
 
 /**
  * Assina novas mensagens de chat em tempo real para o usuário logado
- * (mentor ou aluno). Chamada depois de `fetchAll()` no login/refresh da
- * sessão; `company` não tem chat, então não assina nada.
+ * (mentor ou aluno). Chamada no login, na restauração da sessão e a cada evento
+ * de sessão (inclusive renovação do token); `company` não tem chat.
  */
 export function subscribeRealtime() {
   const { user, accountType } = useAuthStore.getState()
-  // Sempre parte de um estado limpo: evita "cannot add callbacks after subscribe()"
-  // caso essa função seja chamada mais de uma vez (ex: refresh + onAuthStateChange).
-  unsubscribeRealtime()
-  if (!user || (accountType !== 'mentor' && accountType !== 'student')) return
+  if (!user || (accountType !== 'mentor' && accountType !== 'student')) {
+    unsubscribeRealtime()
+    return
+  }
 
   const column = accountType === 'mentor' ? 'mentor_id' : 'student_id'
-  messagesChannel = supabase
-    .channel(`mentor-messages-${user.id}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'mentor_messages', filter: `${column}=eq.${user.id}` },
-      () => void refetch(['mentorMessages'])
-    )
-    .subscribe()
+  const key = `${column}:${user.id}`
+  if (messagesChannel && messagesChannelKey === key) return
+
+  // Remove o canal anterior e também canais de mensagens que o cliente ainda tem mas este módulo não
+  // conhece (ex: sobra do hot reload do Vite, que zera as variáveis daqui mas não o cliente Supabase).
+  removeMessageChannels()
+
+  try {
+    // Nome único: supabase.channel() devolve o canal existente com o mesmo nome e, se ele ainda
+    // estiver inscrito, .on() lança "cannot add `postgres_changes` callbacks ... after `subscribe()`".
+    messagesChannel = supabase
+      .channel(`${MESSAGES_TOPIC_PREFIX}${user.id}-${++channelSeq}-${Math.random().toString(36).slice(2, 8)}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'mentor_messages', filter: `${column}=eq.${user.id}` },
+        () => void refetch(['mentorMessages'])
+      )
+      .subscribe()
+    messagesChannelKey = key
+  } catch (err) {
+    // O chat em tempo real é um extra: falhar aqui não pode impedir o login nem a navegação.
+    console.warn('Realtime indisponível; as mensagens novas aparecem ao recarregar.', err)
+    messagesChannel = null
+    messagesChannelKey = null
+  }
+}
+
+function removeMessageChannels() {
+  for (const channel of supabase.getChannels()) {
+    const leaving = channel.state === 'leaving' || channel.state === 'closed'
+    if (channel.topic.startsWith(`realtime:${MESSAGES_TOPIC_PREFIX}`) && !leaving) void supabase.removeChannel(channel)
+  }
+  messagesChannel = null
+  messagesChannelKey = null
 }
 
 export function unsubscribeRealtime() {
-  if (!messagesChannel) return
-  void supabase.removeChannel(messagesChannel)
-  messagesChannel = null
+  removeMessageChannels()
 }
 
 export const useDataStore = create<DataState>((set) => ({
@@ -203,14 +268,34 @@ export const useDataStore = create<DataState>((set) => ({
   mentorActivities: [],
   mentorMessages: [],
   dataLoaded: false,
+  loadError: null,
 
-  fetchAll: async () => {
-    const keys = Object.keys(fetchers) as SliceKey[]
-    const entries = await Promise.all(keys.map(async (k) => [k, await fetchers[k]()] as const))
-    set({ ...Object.fromEntries(entries), dataLoaded: true })
+  fetchAll: () => {
+    if (fetchAllInFlight) return fetchAllInFlight
+    const seq = ++dataSeq
+    set({ loadError: null })
+    let run: Promise<void> | null = null
+    run = (async () => {
+      try {
+        // Libera horários semanais presos por sessões que já passaram (RPC opcional no servidor).
+        await releasePastSessionSlots()
+        const slices = await loadSlices(Object.keys(fetchers) as SliceKey[])
+        if (seq === dataSeq) set({ ...slices, dataLoaded: true, loadError: null })
+      } catch (err) {
+        // Antes a falha virava "unhandled rejection" e dataLoaded ficava false para sempre: tela em branco.
+        console.error('Falha ao carregar os dados', err)
+        if (seq === dataSeq) set({ loadError: friendlyError(err, 'Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.') })
+      } finally {
+        if (fetchAllInFlight === run) fetchAllInFlight = null
+      }
+    })()
+    fetchAllInFlight = run
+    return run
   },
 
-  clear: () =>
+  clear: () => {
+    dataSeq++
+    fetchAllInFlight = null
     set({
       students: [],
       mentors: [],
@@ -228,13 +313,17 @@ export const useDataStore = create<DataState>((set) => ({
       mentorActivities: [],
       mentorMessages: [],
       dataLoaded: false,
-    }),
+      loadError: null,
+    })
+  },
 
   approveRequest: async (requestId) => {
     const req = useDataStore.getState().enrollmentRequests.find((r) => r.id === requestId)
-    if (!req) return
-    await updateEnrollmentRequestStatus(requestId, 'ativo')
+    if (!req) throw userError('Solicitação não encontrada. Recarregue a página.')
+    // Vincula o aluno primeiro: se isso falhar, a solicitação continua pendente e pode ser aprovada
+    // de novo. Na ordem inversa ela ficava "ativa" com o aluno fora do treinamento.
     await updateStudentRow(req.studentId, { companyId: req.companyId, programId: req.programId })
+    await updateEnrollmentRequestStatus(requestId, 'ativo')
     await refetch(['enrollmentRequests', 'students', 'programs'])
   },
 
@@ -246,6 +335,12 @@ export const useDataStore = create<DataState>((set) => ({
   inviteStudentByEmail: async (programId, email) => {
     await inviteExistingStudent(programId, email)
     await refetch(['enrollmentRequests', 'students', 'programs'])
+  },
+
+  updateStudentProfile: async (studentId, patch) => {
+    await updateStudentRow(studentId, patch)
+    await refetch(['students'])
+    syncAuthUser(useDataStore.getState().students.find((s) => s.id === studentId))
   },
 
   addCourse: async (course) => {
@@ -274,10 +369,9 @@ export const useDataStore = create<DataState>((set) => ({
     return { courseCompleted: result.course_completed }
   },
 
-  addMentorDirect: async () => {
-    throw new Error(
-      'Cadastro direto de mentor não está disponível nesta versão: um login real só pode ser criado pela própria pessoa em /cadastro. Use "Convidar por e-mail" e peça para o mentor se cadastrar.'
-    )
+  addMentorDirect: async (input) => {
+    await callCompanyUsers({ action: 'create_mentor', ...input })
+    await refetch(['mentors', 'programs', 'mentorInvites'])
   },
 
   inviteMentorByEmail: async (companyId, name, email) => {
@@ -291,18 +385,15 @@ export const useDataStore = create<DataState>((set) => ({
   },
 
   removeMentor: async (mentorId) => {
-    await deleteMentorRow(mentorId)
-    await refetch(['mentors'])
+    // Desvincula da empresa em vez de apagar: o DELETE em `mentors` excluía a conta do mentor e, em
+    // cascata, horários, sessões (inclusive o histórico dos alunos), atividades e mensagens.
+    await unlinkCompanyMentor(mentorId)
+    await refetch(['mentors', 'programs'])
   },
 
   removeMentorInvite: async (inviteId) => {
     await deleteMentorInviteRow(inviteId)
     await refetch(['mentorInvites'])
-  },
-
-  updateMentorPrograms: async (mentorId, programIds) => {
-    await setMentorProgramsRows(mentorId, programIds)
-    await refetch(['mentors'])
   },
 
   updateMentorProfile: async (mentorId, patch) => {
@@ -311,19 +402,20 @@ export const useDataStore = create<DataState>((set) => ({
   },
 
   addProgram: async (program) => {
-    await insertProgramRow(program)
-    await refetch(['programs', 'students', 'mentors'])
+    const programId = await insertProgramRow(program)
+    await refetch(['programs', 'students', 'mentors', 'courses'])
+    return programId
   },
 
   updateProgram: async (id, patch) => {
     await updateProgramRow(id, patch)
-    await refetch(['programs', 'courses'])
+    await refetch(['programs', 'courses', 'mentors'])
   },
 
   setProgramStudents: async (programId, studentIds) => {
     const program = useDataStore.getState().programs.find((p) => p.id === programId)
-    if (!program) return
-    await setProgramStudentsRows(programId, program.companyId, studentIds)
+    if (!program) throw userError('Treinamento não encontrado. Recarregue a página.')
+    await setProgramStudentsRows(programId, program.companyId, studentIds, program.studentIds)
     await refetch(['programs', 'students'])
   },
 
@@ -355,24 +447,42 @@ export const useDataStore = create<DataState>((set) => ({
   updateCompanyProfile: async (companyId, patch) => {
     await updateCompanyRow(companyId, patch)
     await refetch(['companies'])
+    syncAuthUser(useDataStore.getState().companies.find((c) => c.id === companyId))
+  },
+
+  addCompanyAdmin: async (input) => {
+    await callCompanyUsers({ action: 'create_admin', ...input })
+    await refetch(['companies'])
+    syncAuthUser(useDataStore.getState().companies.find((c) => c.id === useAuthStore.getState().user?.id))
+  },
+
+  removeCompanyAdmin: async (adminId) => {
+    await callCompanyUsers({ action: 'remove_admin', adminId })
+    await refetch(['companies'])
+    syncAuthUser(useDataStore.getState().companies.find((c) => c.id === useAuthStore.getState().user?.id))
   },
 
   bookSession: async (mentorId, _studentId, availabilityId, topic) => {
     const mentor = useDataStore.getState().mentors.find((m) => m.id === mentorId)
     const slot = mentor?.availability.find((a) => a.id === availabilityId)
-    if (!slot) return
+    if (!slot) throw userError('Esse horário não está mais disponível. Escolha outro.')
     await bookMentorSession(availabilityId, nextDateForWeekday(slot.weekday), topic)
     await refetch(['mentorSessions', 'mentors'])
   },
 
-  setMentorAvailability: async (mentorId, availability) => {
-    await replaceMentorAvailabilityRows(mentorId, availability)
+  addAvailabilitySlot: async (mentorId, slot) => {
+    await insertAvailabilityRow(mentorId, slot)
+    await refetch(['mentors'])
+  },
+
+  removeAvailabilitySlot: async (slotId) => {
+    await deleteAvailabilityRow(slotId)
     await refetch(['mentors'])
   },
 
   completeSessionFeedback: async (sessionId, notes) => {
     const mentorId = useAuthStore.getState().user?.id
-    if (!mentorId) return
+    if (!mentorId) throw userError('Sua sessão expirou. Entre novamente.')
     await upsertMentorSessionNotes(sessionId, mentorId, notes)
     await refetch(['mentorSessions'])
   },
@@ -389,7 +499,7 @@ export const useDataStore = create<DataState>((set) => ({
 
   assignActivity: async (studentId, title, description, dueDate) => {
     const mentorId = useAuthStore.getState().user?.id
-    if (!mentorId) return
+    if (!mentorId) throw userError('Sua sessão expirou. Entre novamente.')
     await insertActivityRow({ mentorId, studentId, title, description, dueDate })
     await refetch(['mentorActivities'])
   },
@@ -416,7 +526,8 @@ export const useDataStore = create<DataState>((set) => ({
 
   sendMessage: async (mentorId, studentId, body) => {
     const senderId = useAuthStore.getState().user?.id
-    if (!senderId || !body.trim()) return
+    if (!senderId) throw userError('Sua sessão expirou. Entre novamente.')
+    if (!body.trim()) return
     await insertMessageRow(mentorId, studentId, senderId, body.trim())
     await refetch(['mentorMessages'])
   },

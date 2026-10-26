@@ -17,7 +17,7 @@ interface CourseRow {
   total_hours: number
   instructor: string
   instructor_mentor_id: string | null
-  cover_url: string
+  cover_url: string | null
   status: Course['status']
   company_id: string | null
   enrolled_count: number
@@ -40,7 +40,7 @@ function toCourse(row: CourseRow): Course {
     modules,
     instructor: row.instructor,
     instructorMentorId: row.instructor_mentor_id ?? undefined,
-    coverUrl: row.cover_url,
+    coverUrl: row.cover_url ?? '',
     status: row.status,
     companyId: row.company_id ?? undefined,
     programIds: (row.course_programs ?? []).map((cp) => cp.program_id),
@@ -58,23 +58,24 @@ export async function fetchCourses(): Promise<Course[]> {
 }
 
 export async function insertCourseRow(input: Omit<Course, 'id' | 'enrolledCount' | 'rating'>) {
-  const { data, error } = await supabase
+  // Id gerado aqui e insert sem .select(): o RETURNING passaria pela política de leitura, cuja função
+  // (fn_course_visible) consulta a própria tabela e ainda não enxerga a linha nova — o Postgres recusava o insert.
+  const courseId = crypto.randomUUID()
+  const { error } = await supabase
     .from('courses')
     .insert({
+      id: courseId,
       title: input.title,
       summary: input.summary,
       category: input.category,
       total_hours: input.totalHours,
       instructor: input.instructor,
       instructor_mentor_id: input.instructorMentorId ?? null,
-      cover_url: input.coverUrl,
+      cover_url: input.coverUrl || null,
       status: input.status,
       company_id: input.companyId ?? null,
     })
-    .select()
-    .single()
   if (error) throw error
-  const courseId = data.id as string
   if (input.modules.length) {
     const { error: modErr } = await supabase
       .from('modules')
@@ -95,7 +96,7 @@ export async function updateCourseRow(id: string, patch: Partial<Course>) {
   if (patch.totalHours !== undefined) fields.total_hours = patch.totalHours
   if (patch.instructor !== undefined) fields.instructor = patch.instructor
   if (patch.instructorMentorId !== undefined) fields.instructor_mentor_id = patch.instructorMentorId ?? null
-  if (patch.coverUrl !== undefined) fields.cover_url = patch.coverUrl
+  if (patch.coverUrl !== undefined) fields.cover_url = patch.coverUrl || null
   if (patch.status !== undefined) fields.status = patch.status
   if (patch.companyId !== undefined) fields.company_id = patch.companyId ?? null
   if (Object.keys(fields).length) {
@@ -103,7 +104,8 @@ export async function updateCourseRow(id: string, patch: Partial<Course>) {
     if (error) throw error
   }
   if (patch.modules) {
-    await supabase.from('modules').delete().eq('course_id', id)
+    const { error: delErr } = await supabase.from('modules').delete().eq('course_id', id)
+    if (delErr) throw delErr
     if (patch.modules.length) {
       const { error } = await supabase
         .from('modules')
@@ -112,7 +114,8 @@ export async function updateCourseRow(id: string, patch: Partial<Course>) {
     }
   }
   if (patch.programIds) {
-    await supabase.from('course_programs').delete().eq('course_id', id)
+    const { error: delErr } = await supabase.from('course_programs').delete().eq('course_id', id)
+    if (delErr) throw delErr
     if (patch.programIds.length) {
       const { error } = await supabase.from('course_programs').insert(patch.programIds.map((pid) => ({ course_id: id, program_id: pid })))
       if (error) throw error

@@ -1,34 +1,71 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AtSign, GraduationCap, MessageCircle, Rss, Share2 } from 'lucide-react'
+import { AtSign, Check, MessageCircle, Rss, Share2 } from 'lucide-react'
+import logo from '../../assets/logo.svg'
 
 const columns = [
   {
     title: 'Plataforma',
     links: [
-      { label: 'Explorar cursos', to: '/' },
-      { label: 'Mentoria', to: '/' },
-      { label: 'Para empresas', to: '/' },
-      { label: 'Preços', to: '/' },
+      { label: 'Explorar cursos', to: '/#cursos' },
+      { label: 'Mentoria', to: '/#mentoria' },
+      { label: 'Para empresas', to: '/#empresas' },
+      { label: 'Preços', to: '/precos' },
     ],
   },
   {
     title: 'Institucional',
     links: [
-      { label: 'Sobre a SkillBridge', to: '/' },
-      { label: 'Carreiras', to: '/' },
-      { label: 'Imprensa', to: '/' },
-      { label: 'Parceiros', to: '/' },
+      { label: 'Sobre a SkillBridge', to: '/sobre' },
+      { label: 'Carreiras', to: '/carreiras' },
+      { label: 'Imprensa', to: '/imprensa' },
+      { label: 'Parceiros', to: '/parceiros' },
     ],
   },
   {
     title: 'Suporte',
     links: [
-      { label: 'Central de ajuda', to: '/' },
-      { label: 'Contato', to: '/' },
-      { label: 'Termos de uso', to: '/' },
-      { label: 'Privacidade', to: '/' },
+      { label: 'Central de ajuda', to: '/ajuda' },
+      { label: 'Contato', to: '/contato' },
+      { label: 'Termos de uso', to: '/termos' },
+      { label: 'Privacidade', to: '/privacidade' },
     ],
   },
+]
+
+const iconClass =
+  'flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary hover:text-white dark:bg-primary-500/10 dark:text-primary-300'
+
+/** Compartilha o site (menu nativo no celular) ou, sem suporte, copia o link. */
+function ShareButton() {
+  const [copied, setCopied] = useState(false)
+
+  const share = async () => {
+    const url = window.location.origin
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'SkillBridge', text: 'Cursos, mentoria e oportunidades em um só lugar.', url })
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* compartilhamento cancelado pelo usuário */
+    }
+  }
+
+  return (
+    <button type="button" onClick={share} aria-label="Compartilhar a SkillBridge" title={copied ? 'Link copiado!' : 'Compartilhar'} className={iconClass}>
+      {copied ? <Check size={16} /> : <Share2 size={16} />}
+    </button>
+  )
+}
+
+const socialLinks = [
+  { icon: AtSign, label: 'Fale conosco', to: '/contato' },
+  { icon: MessageCircle, label: 'Central de ajuda', to: '/ajuda' },
+  { icon: Rss, label: 'Novidades', to: '/imprensa' },
 ]
 
 export function Footer() {
@@ -38,25 +75,19 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-                <GraduationCap size={20} />
-              </div>
+              <img src={logo} alt="" className="h-9 w-auto" />
               <span className="text-lg font-extrabold text-slate-900 dark:text-slate-50">SkillBridge</span>
             </div>
             <p className="mt-3 max-w-xs text-sm text-slate-500 dark:text-slate-400">
               A ponte entre aprendizado, mentoria e oportunidades reais de carreira — para pessoas e empresas.
             </p>
             <div className="mt-5 flex items-center gap-3">
-              {[AtSign, Share2, MessageCircle, Rss].map((Icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  aria-label="Rede social"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary hover:text-white dark:bg-primary-500/10 dark:text-primary-300"
-                >
+              {socialLinks.map(({ icon: Icon, label, to }) => (
+                <Link key={to} to={to} aria-label={label} title={label} className={iconClass}>
                   <Icon size={16} />
-                </a>
+                </Link>
               ))}
+              <ShareButton />
             </div>
           </div>
 

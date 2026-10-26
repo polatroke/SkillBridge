@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { CalendarClock, Clock, Star, Users } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { MentorSidebar } from '../../components/layout/MentorSidebar'
@@ -6,10 +5,10 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Avatar } from '../../components/ui/Avatar'
-import { Button } from '../../components/ui/Button'
+import { ButtonLink } from '../../components/ui/Button'
 import { useAuthStore } from '../../store/authStore'
 import { useCurrentMentor, useDataStore } from '../../store/dataStore'
-import { formatDateBR } from '../../lib/date'
+import { formatDateBR, todayISO } from '../../lib/date'
 
 export default function MentorDashboard() {
   const authUser = useAuthStore((s) => s.user)
@@ -21,12 +20,17 @@ export default function MentorDashboard() {
   if (!mentor) return null
 
   const mySessions = sessions.filter((s) => s.mentorId === mentor.id)
-  const upcoming = mySessions.filter((s) => s.status === 'agendada').sort((a, b) => a.date.localeCompare(b.date))
+  // Sessão agendada com data passada está só aguardando a avaliação do aluno: não é compromisso futuro.
+  const today = todayISO()
+  const upcoming = mySessions
+    .filter((s) => s.status === 'agendada' && s.date >= today)
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
   const completed = mySessions.filter((s) => s.status === 'concluida')
   const uniqueStudents = new Set(mySessions.map((s) => s.studentId)).size
-  const avgRating = completed.filter((s) => s.rating).length
-    ? (completed.reduce((sum, s) => sum + (s.rating ?? 0), 0) / completed.filter((s) => s.rating).length).toFixed(1)
-    : '—'
+  // Mesma nota que os alunos veem no card do mentor (antes o painel recalculava só com as sessões carregadas
+  // e mostrava um número diferente do perfil público).
+  const avgRating = mentor.reviewsCount > 0 ? `${Number(mentor.rating).toFixed(1)} (${mentor.reviewsCount})` : '—'
+  const awaitingReview = mySessions.filter((s) => s.status === 'agendada' && s.date < today).length
 
   return (
     <DashboardLayout sidebar={<MentorSidebar />} profileTitle="Painel do Mentor">
@@ -34,15 +38,19 @@ export default function MentorDashboard() {
         title="Sua agenda"
         description="Acompanhe seus próximos compromissos e o histórico de mentorias."
         actions={
-          <Link to="/mentor/horarios">
-            <Button icon={<CalendarClock size={16} />}>Definir horários</Button>
-          </Link>
+          <ButtonLink to="/mentor/horarios" icon={<CalendarClock size={16} />}>Definir horários</ButtonLink>
         }
       />
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={CalendarClock} label="Sessões agendadas" value={upcoming.length} tone="primary" />
-        <StatCard icon={Clock} label="Sessões concluídas" value={completed.length} tone="cta" />
+        <StatCard
+          icon={Clock}
+          label="Sessões concluídas"
+          value={completed.length}
+          hint={awaitingReview ? `${awaitingReview} aguardando avaliação do aluno` : undefined}
+          tone="cta"
+        />
         <StatCard icon={Users} label="Alunos atendidos" value={uniqueStudents} tone="emerald" />
         <StatCard icon={Star} label="Avaliação média" value={avgRating} tone="amber" />
       </div>

@@ -12,7 +12,9 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Modal } from '../../components/ui/Modal'
 import { useAuthStore } from '../../store/authStore'
 import { useCurrentMentor, useDataStore } from '../../store/dataStore'
-import { formatDateBR, formatDateTimeBR } from '../../lib/date'
+import { formatDateBR, formatDateTimeBR, todayISO } from '../../lib/date'
+import { friendlyError } from '../../lib/errors'
+import { safeHttpUrl } from '../../lib/validation'
 import type { MentorActivity } from '../../types'
 
 interface Draft {
@@ -41,6 +43,9 @@ export default function MentorActivities() {
   const [feedback, setFeedback] = useState('')
   const [savingReview, setSavingReview] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  /** Aluno cujo formulário "Atribuir" está enviando (evita duplo clique criar duas atividades). */
+  const [assigningFor, setAssigningFor] = useState<string | null>(null)
 
   if (!mentor) return null
 
@@ -53,9 +58,26 @@ export default function MentorActivities() {
   const handleAssign = async (studentId: string, e: React.FormEvent) => {
     e.preventDefault()
     const draft = drafts[studentId] ?? emptyDraft
-    if (!draft.title.trim()) return
-    await assignActivity(studentId, draft.title.trim(), draft.description.trim() || undefined, draft.dueDate || undefined)
-    setDrafts((d) => ({ ...d, [studentId]: emptyDraft }))
+    if (!draft.title.trim() || assigningFor) return
+    setActionError(null)
+    setAssigningFor(studentId)
+    try {
+      await assignActivity(studentId, draft.title.trim(), draft.description.trim() || undefined, draft.dueDate || undefined)
+      setDrafts((d) => ({ ...d, [studentId]: emptyDraft }))
+    } catch (err) {
+      setActionError(friendlyError(err, 'Não foi possível atribuir a atividade. Tente novamente.'))
+    } finally {
+      setAssigningFor(null)
+    }
+  }
+
+  const toggleDone = async (activity: MentorActivity) => {
+    setActionError(null)
+    try {
+      await updateActivityStatus(activity.id, activity.status === 'concluida' ? 'pendente' : 'concluida')
+    } catch (err) {
+      setActionError(friendlyError(err, 'Não foi possível atualizar a atividade. Tente novamente.'))
+    }
   }
 
   const openReview = (activity: MentorActivity) => {
@@ -71,8 +93,8 @@ export default function MentorActivities() {
     try {
       await reviewActivity(reviewing.id, status, feedback)
       setReviewing(null)
-    } catch {
-      setReviewError('Não foi possível salvar a revisão. Tente novamente.')
+    } catch (err) {
+      setReviewError(friendlyError(err, 'Não foi possível salvar a revisão. Tente novamente.'))
     } finally {
       setSavingReview(false)
     }
@@ -82,6 +104,7 @@ export default function MentorActivities() {
     <DashboardLayout sidebar={<MentorSidebar />} profileTitle="Painel do Mentor">
       <PageHeader title="Atividades" description="Atribua tarefas aos seus mentorados, corrija as entregas e acompanhe o que já foi concluído." />
 
+      {actionError && <p className="mb-4 text-sm font-semibold text-red-600 dark:text-red-400">{actionError}</p>}
       <div className="space-y-5">
         {studentIds.map((studentId) => {
           const student = getStudentById(studentId)
@@ -110,15 +133,16 @@ export default function MentorActivities() {
                   />
                 </div>
                 <div className="w-full sm:w-40">
-                  <Input label="Prazo" type="date" value={draft.dueDate} onChange={(e) => setDraft(studentId, { dueDate: e.target.value })} />
+                  <Input label="Prazo" type="date" min={todayISO()} value={draft.dueDate} onChange={(e) => setDraft(studentId, { dueDate: e.target.value })} />
                 </div>
-                <Button type="submit" icon={<Plus size={15} />} disabled={!draft.title.trim()}>
-                  Atribuir
+                <Button type="submit" icon={<Plus size={15} />} disabled={!draft.title.trim() || assigningFor === studentId}>
+                  {assigningFor === studentId ? 'Atribuindo...' : 'Atribuir'}
                 </Button>
               </form>
               <textarea
                 value={draft.description}
                 onChange={(e) => setDraft(studentId, { description: e.target.value })}
+                aria-label={`Detalhes da nova atividade para ${student?.name ?? 'o aluno'}`}
                 placeholder="Detalhes da atividade (opcional)"
                 className="mt-2 min-h-[60px] w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
               />
@@ -157,12 +181,12 @@ export default function MentorActivities() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => updateActivityStatus(activity.id, activity.status === 'concluida' ? 'pendente' : 'concluida')}
+                          onClick={() => toggleDone(activity)}
                         >
                           {activity.status === 'concluida' ? 'Reabrir' : 'Concluir'}
                         </Button>
                       )}
-                      <button onClick={() => setDeleteId(activity.id)} className="text-slate-300 hover:text-red-500" aria-label="Excluir atividade">
+                      <button onClick={() => setDeleteId(activity.id)} className="text-slate-300 hover:text-red-500" aria-label={`Excluir atividade ${activity.title}`}>
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -183,7 +207,7 @@ export default function MentorActivities() {
 
       <Modal
         open={!!reviewing}
-        onClose={() => setReviewing(null)}
+        onClose={() => !savingReview && setReviewing(null)}
         title={`Corrigir: ${reviewing?.title ?? ''}`}
         description={reviewing ? `Entrega de ${getStudentById(reviewing.studentId)?.name ?? 'aluno'}` : undefined}
         size="lg"
@@ -208,9 +232,9 @@ export default function MentorActivities() {
                 Resposta do aluno{reviewing.submittedAt && ` · ${formatDateTimeBR(reviewing.submittedAt)}`}
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{reviewing.submission}</p>
-              {reviewing.submissionUrl && (
+              {safeHttpUrl(reviewing.submissionUrl) && (
                 <a
-                  href={reviewing.submissionUrl}
+                  href={safeHttpUrl(reviewing.submissionUrl)!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-2 inline-flex items-center gap-1 break-all text-sm font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-300"
@@ -236,7 +260,9 @@ export default function MentorActivities() {
       <ConfirmDialog
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={() => deleteId && deleteActivity(deleteId)}
+        onConfirm={async () => {
+          if (deleteId) await deleteActivity(deleteId)
+        }}
         title="Excluir atividade"
         description="O aluno não vai mais ver essa atividade."
         confirmLabel="Excluir"

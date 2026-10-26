@@ -38,9 +38,10 @@ export default function StudentDoubts() {
       ? (fromLink as string)
       : (mentorIds[0] ?? null)
 
+  const unreadInSelected = messages.filter((m) => m.mentorId === selected && m.studentId === student?.id && m.senderId !== student?.id && !m.read).length
   useEffect(() => {
-    if (student?.id && selected) void markThreadRead(selected, student.id)
-  }, [student?.id, selected, markThreadRead])
+    if (student?.id && selected && unreadInSelected > 0) void markThreadRead(selected, student.id).catch(() => {})
+  }, [student?.id, selected, unreadInSelected, markThreadRead])
 
   if (!student) return null
 
@@ -58,8 +59,9 @@ export default function StudentDoubts() {
           Agende uma sessão de mentoria para poder conversar com um mentor por aqui.
         </div>
       ) : (
-        <Card padding="none" className="flex h-[36rem] overflow-hidden">
-          <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-100 dark:border-slate-700/60">
+        <Card padding="none" className="flex h-[36rem] flex-col overflow-hidden md:flex-row">
+          {/* No celular a lista vira uma faixa rolável acima da conversa (lado a lado não cabia). */}
+          <div className="max-h-44 w-full shrink-0 overflow-y-auto border-b border-slate-100 md:max-h-none md:w-72 md:border-b-0 md:border-r dark:border-slate-700/60">
             {mentorIds.map((mentorId) => {
               const mentor = getMentorById(mentorId)
               const thread = threadFor(mentorId)
@@ -89,7 +91,7 @@ export default function StudentDoubts() {
             })}
           </div>
 
-          <div className="flex-1">
+          <div className="min-h-0 flex-1">
             {selectedMentor ? (
               <ChatThread
                 messages={selectedThread}

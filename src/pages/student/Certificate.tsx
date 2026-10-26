@@ -1,10 +1,11 @@
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Award, GraduationCap, Printer } from 'lucide-react'
-import { Button } from '../../components/ui/Button'
+import { useParams } from 'react-router-dom'
+import { ArrowLeft, Award, Printer } from 'lucide-react'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { useAuthStore } from '../../store/authStore'
 import { useCurrentStudent, useDataStore } from '../../store/dataStore'
 import { formatDateBR } from '../../lib/date'
+import logo from '../../assets/logo.svg'
 
 /**
  * Certificado de conclusão em página própria (sem sidebar), pensado para
@@ -21,24 +22,33 @@ export default function Certificate() {
 
   if (!student) return null
 
+  // O curso pode não estar mais visível (saiu do treinamento, despublicado): usa o retrato gravado no certificado.
+  const doc = certificate
+    ? {
+        title: course?.title ?? certificate.courseTitle,
+        hours: course?.totalHours ?? certificate.courseHours,
+        instructor: course?.instructor ?? certificate.instructor,
+        companyName: company?.name ?? certificate.companyName,
+      }
+    : null
+  const found = !!certificate && !!doc?.title && certificate.studentId === student.id
+
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-8 print:bg-white print:p-0 dark:bg-slate-900">
       <style>{'@page { size: A4 landscape; margin: 0; }'}</style>
 
       <div className="mx-auto mb-6 flex max-w-4xl items-center justify-between gap-3 print:hidden">
-        <Link to="/aluno/perfil">
-          <Button variant="ghost" icon={<ArrowLeft size={16} />}>
+        <ButtonLink to="/aluno/perfil" variant="ghost" icon={<ArrowLeft size={16} />}>
             Meu perfil
-          </Button>
-        </Link>
-        {certificate && course && (
+          </ButtonLink>
+        {found && (
           <Button icon={<Printer size={16} />} onClick={() => window.print()}>
             Imprimir / salvar PDF
           </Button>
         )}
       </div>
 
-      {!certificate || !course || certificate.studentId !== student.id ? (
+      {!found || !certificate || !doc ? (
         <div className="mx-auto max-w-xl">
           <EmptyState title="Certificado não encontrado" description="Esse certificado não existe ou não pertence à sua conta." />
         </div>
@@ -46,9 +56,7 @@ export default function Certificate() {
         <div className="mx-auto max-w-4xl sm:aspect-[1.414] bg-white p-3 text-slate-900 shadow-card print:max-w-none print:shadow-none">
           <div className="flex h-full flex-col items-center justify-between gap-8 rounded-lg border-4 border-double border-primary-300 px-6 py-10 text-center sm:px-10">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-                <GraduationCap size={20} />
-              </div>
+              <img src={logo} alt="" className="h-9 w-auto" />
               <span className="text-lg font-extrabold">SkillBridge</span>
             </div>
 
@@ -57,9 +65,10 @@ export default function Certificate() {
               <p className="mt-6 text-sm text-slate-500">Certificamos que</p>
               <p className="mt-2 text-3xl font-extrabold sm:text-4xl">{student.name}</p>
               <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600">
-                concluiu o curso <strong className="text-slate-900">{course.title}</strong>
-                {company && <> do treinamento corporativo da {company.name}</>}, com carga horária de {course.totalHours} horas, ministrado por{' '}
-                {course.instructor}.
+                concluiu o curso <strong className="text-slate-900">{doc.title}</strong>
+                {doc.companyName && <> do treinamento corporativo da {doc.companyName}</>}
+                {doc.hours ? <>, com carga horária de {doc.hours} horas</> : null}
+                {doc.instructor ? <>, ministrado por {doc.instructor}</> : null}.
               </p>
             </div>
 

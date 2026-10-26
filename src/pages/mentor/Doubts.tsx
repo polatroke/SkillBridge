@@ -38,9 +38,10 @@ export default function MentorDoubts() {
       ? (fromLink as string)
       : (studentIds[0] ?? null)
 
+  const unreadInSelected = messages.filter((m) => m.mentorId === mentor?.id && m.studentId === selected && m.senderId !== mentor?.id && !m.read).length
   useEffect(() => {
-    if (mentor?.id && selected) void markThreadRead(mentor.id, selected)
-  }, [mentor?.id, selected, markThreadRead])
+    if (mentor?.id && selected && unreadInSelected > 0) void markThreadRead(mentor.id, selected).catch(() => {})
+  }, [mentor?.id, selected, unreadInSelected, markThreadRead])
 
   if (!mentor) return null
 
@@ -58,8 +59,9 @@ export default function MentorDoubts() {
           Você ainda não tem alunos mentorados. Assim que uma sessão for agendada, o aluno aparece aqui.
         </div>
       ) : (
-        <Card padding="none" className="flex h-[36rem] overflow-hidden">
-          <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-100 dark:border-slate-700/60">
+        <Card padding="none" className="flex h-[36rem] flex-col overflow-hidden md:flex-row">
+          {/* No celular a lista vira uma faixa rolável acima da conversa (lado a lado não cabia). */}
+          <div className="max-h-44 w-full shrink-0 overflow-y-auto border-b border-slate-100 md:max-h-none md:w-72 md:border-b-0 md:border-r dark:border-slate-700/60">
             {studentIds.map((studentId) => {
               const student = getStudentById(studentId)
               const thread = threadFor(studentId)
@@ -89,7 +91,7 @@ export default function MentorDoubts() {
             })}
           </div>
 
-          <div className="flex-1">
+          <div className="min-h-0 flex-1">
             {selectedStudent ? (
               <ChatThread
                 messages={selectedThread}

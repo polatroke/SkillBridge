@@ -12,6 +12,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleJobsForStudent, isStudentInProgram } from '../../lib/access'
 import { formatDateBR } from '../../lib/date'
+import { friendlyError } from '../../lib/errors'
 import type { Job, JobApplication } from '../../types'
 
 const applicationBadge: Record<JobApplication['status'], { status: 'agendada' | 'pendente' | 'aprovado' | 'recusado'; label: string }> = {
@@ -39,8 +40,8 @@ export default function StudentJobs() {
     try {
       await applyToJob(job.id)
       setApplied(job)
-    } catch {
-      setApplyError('Não foi possível enviar sua candidatura. Tente novamente.')
+    } catch (err) {
+      setApplyError(friendlyError(err, 'Não foi possível enviar sua candidatura. Tente novamente.'))
     } finally {
       setApplyingId(null)
     }
@@ -66,7 +67,7 @@ export default function StudentJobs() {
         <EmptyState
           icon={Lock}
           title="Vagas disponíveis apenas dentro de um treinamento"
-          description="A SkillBridge não tem uma seção pública de vagas. Elas só aparecem para alunos participando de um treinamento (programa) oferecido por uma empresa parceira. Explore o catálogo de cursos e candidate-se a um treinamento para desbloquear vagas internas."
+          description="A SkillBridge não tem uma seção pública de vagas. Elas só aparecem para alunos participando de um treinamento (programa) oferecido por uma empresa parceira. Quando uma empresa vincular você a um treinamento, as vagas internas dele aparecem aqui."
         />
       ) : visibleJobs.length === 0 ? (
         <EmptyState
@@ -94,7 +95,7 @@ export default function StudentJobs() {
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{job.description}</p>
                     <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
                       <span className="flex items-center gap-1">
-                        <MapPin size={13} /> {job.location} · {job.mode}
+                        <MapPin size={13} /> {[job.location, job.mode].filter(Boolean).join(' · ')}
                       </span>
                       <span>{job.department}</span>
                     </div>

@@ -5,7 +5,7 @@ import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
@@ -15,6 +15,8 @@ import { useAuthStore } from '../../store/authStore'
 import { useCurrentStudent, useDataStore } from '../../store/dataStore'
 import { formatDateBR, formatDateTimeBR, todayISO } from '../../lib/date'
 import { cn } from '../../lib/cn'
+import { friendlyError } from '../../lib/errors'
+import { safeHttpUrl } from '../../lib/validation'
 import type { MentorActivity } from '../../types'
 
 const tabs = [
@@ -59,14 +61,19 @@ export default function StudentActivities() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!solving || !answer.trim()) return
+    // O mentor abre esse link: só http(s) (type="url" do navegador aceita até javascript:).
+    if (url.trim() && !safeHttpUrl(url)) {
+      setError('O link precisa começar com http:// ou https://.')
+      return
+    }
     setSending(true)
     setError(null)
     try {
-      await submitActivity(solving.id, answer.trim(), url.trim() || undefined)
+      await submitActivity(solving.id, answer.trim(), safeHttpUrl(url) ?? undefined)
       setSolving(null)
       setTab('entregue')
-    } catch {
-      setError('Não foi possível enviar sua resposta. Tente novamente.')
+    } catch (err) {
+      setError(friendlyError(err, 'Não foi possível enviar sua resposta. Tente novamente.'))
     } finally {
       setSending(false)
     }
@@ -165,9 +172,9 @@ export default function StudentActivities() {
                     Sua resposta{activity.submittedAt && ` · enviada em ${formatDateTimeBR(activity.submittedAt)}`}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{activity.submission}</p>
-                  {activity.submissionUrl && (
+                  {safeHttpUrl(activity.submissionUrl) && (
                     <a
-                      href={activity.submissionUrl}
+                      href={safeHttpUrl(activity.submissionUrl)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-2 inline-flex items-center gap-1 break-all text-sm font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-300"
@@ -187,11 +194,9 @@ export default function StudentActivities() {
             title={tabs.find((t) => t.key === tab)!.empty}
             description="Quando um mentor atribuir uma atividade para você, ela aparece aqui. Agende uma mentoria para começar."
             action={
-              <Link to="/aluno/mentoria">
-                <Button variant="secondary" size="sm">
+              <ButtonLink to="/aluno/mentoria" variant="secondary" size="sm">
                   Ir para Mentoria
-                </Button>
-              </Link>
+                </ButtonLink>
             }
           />
         )}
@@ -199,7 +204,7 @@ export default function StudentActivities() {
 
       <Modal
         open={!!solving}
-        onClose={() => setSolving(null)}
+        onClose={() => !sending && setSolving(null)}
         title={solving?.title ?? ''}
         description={solving?.description}
         size="lg"

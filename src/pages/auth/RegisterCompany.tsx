@@ -7,8 +7,9 @@ import { Button } from '../../components/ui/Button'
 import { Input, Select } from '../../components/ui/Field'
 import { signUpCompany } from '../../lib/supabase/auth'
 import { useAuthStore } from '../../store/authStore'
-
-const sectors = ['Tecnologia', 'Varejo', 'Indústria', 'Serviços Financeiros', 'Saúde', 'Educação', 'Outro']
+import { friendlyError } from '../../lib/errors'
+import { cleanName, formatCnpj, isValidCnpj } from '../../lib/validation'
+import { SECTORS } from '../../lib/catalog'
 
 export default function RegisterCompany() {
   const [cnpj, setCnpj] = useState('')
@@ -16,7 +17,7 @@ export default function RegisterCompany() {
   const [name, setName] = useState('')
   const [adminName, setAdminName] = useState('')
   const [email, setEmail] = useState('')
-  const [sector, setSector] = useState(sectors[0])
+  const [sector, setSector] = useState<string>(SECTORS[0])
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -28,15 +29,27 @@ export default function RegisterCompany() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    if (!isValidCnpj(cnpj)) {
+      setError('CNPJ inválido. Confira os 14 dígitos.')
+      return
+    }
+    const cleanRazao = cleanName(razaoSocial)
+    const cleanFantasia = cleanName(name)
+    const cleanAdmin = cleanName(adminName)
+    if (!cleanRazao || !cleanFantasia || !cleanAdmin) {
+      setError('Preencha razão social, nome fantasia e o seu nome.')
+      return
+    }
     setSubmitting(true)
     try {
       const { pendingConfirmation } = await signUpCompany({
-        cnpj,
-        razaoSocial,
-        name: name || razaoSocial,
+        // Sempre no formato com máscara: é assim que os CNPJs já gravados estão e a coluna é única.
+        cnpj: formatCnpj(cnpj),
+        razaoSocial: cleanRazao,
+        name: cleanFantasia,
         email,
         sector,
-        adminName: adminName || name || razaoSocial,
+        adminName: cleanAdmin,
         password,
       })
       if (pendingConfirmation) {
@@ -46,7 +59,7 @@ export default function RegisterCompany() {
       await refresh()
       navigate('/empresa')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível criar a conta. Tente novamente.')
+      setError(friendlyError(err, 'Não foi possível criar a conta. Tente novamente.'))
     } finally {
       setSubmitting(false)
     }
@@ -81,7 +94,14 @@ export default function RegisterCompany() {
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <Input label="CNPJ" placeholder="00.000.000/0000-00" value={cnpj} onChange={(e) => setCnpj(e.target.value)} required />
+            <Input
+              label="CNPJ"
+              placeholder="00.000.000/0000-00"
+              value={cnpj}
+              onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+              inputMode="numeric"
+              required
+            />
             <Input
               label="Razão social"
               placeholder="Razão social da empresa"
@@ -91,9 +111,9 @@ export default function RegisterCompany() {
             />
             <Input label="Nome fantasia" placeholder="Como a empresa aparecerá na plataforma" value={name} onChange={(e) => setName(e.target.value)} required />
             <Input label="Seu nome" placeholder="Nome de quem está cadastrando" value={adminName} onChange={(e) => setAdminName(e.target.value)} required />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Select label="Setor" value={sector} onChange={(e) => setSector(e.target.value)}>
-                {sectors.map((s) => (
+                {SECTORS.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -101,7 +121,17 @@ export default function RegisterCompany() {
               </Select>
               <Input label="E-mail corporativo" type="email" placeholder="contato@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-            <Input label="Senha de acesso" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+            <Input
+              label="Senha de acesso"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              autoComplete="new-password"
+              hint="Mínimo de 6 caracteres."
+            />
 
             {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
 

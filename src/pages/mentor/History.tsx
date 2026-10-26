@@ -43,15 +43,23 @@ export default function MentorHistory() {
                 <Badge status="concluido">Concluída</Badge>
               </div>
 
-              {session.review && (
+              {/* Nota sem comentário também conta: antes só aparecia quando havia texto. */}
+              {(!!session.rating || session.review) && (
                 <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
-                  <div className="flex items-center gap-1 text-cta">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} size={13} fill={i < (session.rating ?? 0) ? 'currentColor' : 'none'} />
-                    ))}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">“{session.review}”</p>
+                  {!!session.rating && (
+                    <div className="flex items-center gap-1 text-cta" aria-label={`Nota ${session.rating} de 5`}>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} size={13} fill={i < (session.rating ?? 0) ? 'currentColor' : 'none'} />
+                      ))}
+                    </div>
+                  )}
+                  {session.review && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">“{session.review}”</p>}
                 </div>
+              )}
+              {session.notes && (
+                <p className="mt-3 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold">Sua anotação:</span> {session.notes}
+                </p>
               )}
             </Card>
           )

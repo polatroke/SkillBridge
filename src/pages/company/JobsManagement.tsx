@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Briefcase, Lock, Plus, Search, SquarePen, Trash2, X } from 'lucide-react'
+import { Briefcase, Lock, Plus, Search, SquarePen, Trash2, Users, X } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { CompanySidebar } from '../../components/layout/CompanySidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -12,6 +12,9 @@ import { Input, Select, Textarea } from '../../components/ui/Field'
 import { MultiSelect } from '../../components/ui/MultiSelect'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
+import { Avatar } from '../../components/ui/Avatar'
+import { formatDateBR } from '../../lib/date'
+import { friendlyError } from '../../lib/errors'
 import type { Job, JobMode, JobStatus, JobType } from '../../types'
 
 const jobTypes: JobType[] = ['Efetivo', 'Estágio', 'Trainee']
@@ -40,18 +43,27 @@ export default function JobsManagement() {
   const updateJob = useDataStore((s) => s.updateJob)
   const closeJob = useDataStore((s) => s.closeJob)
   const deleteJob = useDataStore((s) => s.deleteJob)
+  const applications = useDataStore((s) => s.jobApplications)
+  const students = useDataStore((s) => s.students)
+  const [viewingApplicants, setViewingApplicants] = useState<Job | null>(null)
 
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Job | null>(null)
   const [toDelete, setToDelete] = useState<Job | null>(null)
   const [form, setForm] = useState(blankForm())
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const filtered = jobs.filter((j) => j.title.toLowerCase().includes(search.toLowerCase()))
+  const filtered = jobs.filter((j) => j.title.toLowerCase().includes(search.trim().toLowerCase()))
+  const applicantsOf = (jobId: string) =>
+    applications.filter((a) => a.jobId === jobId).sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))
 
   const openCreate = () => {
     setEditing(null)
     setForm(blankForm())
+    setFormError(null)
     setFormOpen(true)
   }
 
@@ -68,26 +80,53 @@ export default function JobsManagement() {
       programIds: job.programIds,
       status: job.status,
     })
+    setFormError(null)
     setFormOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // O MultiSelect não tem validação nativa: a vaga precisa de ao menos um treinamento para aparecer.
+    if (form.programIds.length === 0) {
+      setFormError('Selecione ao menos um treinamento: a vaga só aparece para alunos vinculados a ele.')
+      return
+    }
+    if (!form.title.trim() || !form.description.trim() || !form.department.trim()) {
+      setFormError('Preencha título, descrição e área da vaga.')
+      return
+    }
     const payload = {
       companyId,
-      title: form.title,
-      description: form.description,
-      requirements: form.requirements.filter((r) => r.trim() !== ''),
-      department: form.department,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      requirements: form.requirements.map((r) => r.trim()).filter(Boolean),
+      department: form.department.trim(),
       type: form.type,
       mode: form.mode,
-      location: form.location,
+      location: form.location.trim(),
       programIds: form.programIds,
       status: form.status,
     }
-    if (editing) updateJob(editing.id, payload)
-    else addJob(payload)
-    setFormOpen(false)
+    setSaving(true)
+    setFormError(null)
+    try {
+      if (editing) await updateJob(editing.id, payload)
+      else await addJob(payload)
+      setFormOpen(false)
+    } catch (err) {
+      setFormError(friendlyError(err, 'Não foi possível salvar a vaga. Revise os campos e tente novamente.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleClose = async (jobId: string) => {
+    setActionError(null)
+    try {
+      await closeJob(jobId)
+    } catch (err) {
+      setActionError(friendlyError(err, 'Não foi possível encerrar a vaga. Tente novamente.'))
+    }
   }
 
   return (
@@ -119,6 +158,7 @@ export default function JobsManagement() {
         />
       </div>
 
+      {actionError && <p className="mb-4 text-sm font-semibold text-red-600 dark:text-red-400">{actionError}</p>}
       <Card padding="none" className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -153,8 +193,17 @@ export default function JobsManagement() {
                         ))}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                    <Briefcase size={13} /> {job.applicationsCount}
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300">
+                    {/* flex direto no <td> tirava a célula do layout da tabela e desalinhava a linha */}
+                    <button
+                      type="button"
+                      onClick={() => setViewingApplicants(job)}
+                      disabled={job.applicationsCount === 0}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-semibold hover:bg-primary-50 hover:text-primary-700 disabled:pointer-events-none dark:hover:bg-primary-500/10 dark:hover:text-primary-300"
+                      title={job.applicationsCount ? 'Ver candidatos' : 'Nenhuma candidatura ainda'}
+                    >
+                      <Briefcase size={13} /> {job.applicationsCount}
+                    </button>
                   </td>
                   <td className="px-5 py-3.5">
                     <Badge status={job.status === 'aberta' ? 'aberta' : 'encerrada'} />
@@ -165,7 +214,7 @@ export default function JobsManagement() {
                         <SquarePen size={13} /> Editar
                       </button>
                       {job.status === 'aberta' && (
-                        <button onClick={() => closeJob(job.id)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60">
+                        <button onClick={() => handleClose(job.id)} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60">
                           <X size={13} /> Encerrar
                         </button>
                       )}
@@ -192,11 +241,13 @@ export default function JobsManagement() {
             <Button variant="ghost" onClick={() => setFormOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit}>{editing ? 'Salvar alterações' : 'Publicar vaga'}</Button>
+            <Button type="submit" form="job-form" disabled={saving}>
+              {saving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Publicar vaga'}
+            </Button>
           </>
         }
       >
-        <form className="space-y-5" onSubmit={handleSubmit}>
+        <form id="job-form" className="space-y-5" onSubmit={handleSubmit}>
           <Input label="Título da vaga" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} required />
           <Textarea label="Descrição da vaga" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} required />
 
@@ -227,6 +278,7 @@ export default function JobsManagement() {
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, requirements: f.requirements.filter((_, i) => i !== idx) }))}
                       className="text-slate-300 hover:text-red-500"
+                      aria-label={`Remover requisito ${idx + 1}`}
                     >
                       <X size={16} />
                     </button>
@@ -236,12 +288,12 @@ export default function JobsManagement() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Área / departamento" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))} required />
             <Input label="Localização" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Cidade, UF" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select label="Tipo" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as JobType }))}>
               {jobTypes.map((t) => (
                 <option key={t} value={t}>
@@ -270,17 +322,62 @@ export default function JobsManagement() {
             <option value="aberta">Aberta</option>
             <option value="encerrada">Encerrada</option>
           </Select>
+          {formError && <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formError}</p>}
         </form>
       </Modal>
 
       <ConfirmDialog
         open={!!toDelete}
         onClose={() => setToDelete(null)}
-        onConfirm={() => toDelete && deleteJob(toDelete.id)}
+        onConfirm={async () => {
+          if (toDelete) await deleteJob(toDelete.id)
+        }}
         title={`Remover "${toDelete?.title}"?`}
+        description={
+          toDelete?.applicationsCount
+            ? `As ${toDelete.applicationsCount} candidatura(s) recebidas também serão apagadas. Para só parar de receber candidaturas, use "Encerrar".`
+            : 'A vaga deixa de aparecer para os alunos dos treinamentos vinculados.'
+        }
         confirmLabel="Remover"
         danger
       />
+
+      <Modal
+        open={!!viewingApplicants}
+        onClose={() => setViewingApplicants(null)}
+        title={`Candidatos: ${viewingApplicants?.title ?? ''}`}
+        description="Alunos dos seus treinamentos que se candidataram a esta vaga."
+        footer={<Button onClick={() => setViewingApplicants(null)}>Fechar</Button>}
+      >
+        <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
+          {viewingApplicants &&
+            applicantsOf(viewingApplicants.id).map((a) => {
+              const student = students.find((s) => s.id === a.studentId)
+              return (
+                <div key={a.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={student?.name ?? '?'} size="sm" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{student?.name ?? 'Aluno que saiu do treinamento'}</p>
+                      {student?.email && (
+                        <a href={`mailto:${student.email}`} className="truncate text-xs text-primary-600 hover:underline dark:text-primary-300">
+                          {student.email}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-400">em {formatDateBR(a.appliedAt)}</span>
+                </div>
+              )
+            })}
+          {viewingApplicants && applicantsOf(viewingApplicants.id).length === 0 && (
+            <p className="py-6 text-center text-sm text-slate-400">
+              <Users size={16} className="mx-auto mb-2" />
+              Nenhuma candidatura visível para esta vaga.
+            </p>
+          )}
+        </div>
+      </Modal>
     </DashboardLayout>
   )
 }

@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# SkillBridge
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Plataforma de upskilling com três painéis — **Aluno**, **Mentor** e **Empresa** — em React 19 + Vite + Tailwind 3,
+com autenticação e banco no Supabase (Postgres + RLS).
 
-Currently, two official plugins are available:
+## Rodando localmente
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Crie um arquivo `.env` na raiz com as chaves públicas do projeto Supabase:
 
-## React Compiler
+   ```
+   VITE_SUPABASE_URL=https://<projeto>.supabase.co
+   VITE_SUPABASE_ANON_KEY=<chave anon/publishable>
+   ```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+2. Instale e rode:
 
-## Expanding the Oxlint configuration
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Scripts
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+| Comando         | O que faz                                                                  |
+| --------------- | -------------------------------------------------------------------------- |
+| `npm run dev`   | Servidor de desenvolvimento do Vite                                        |
+| `npm run build` | Checagem de tipos (`tsc -b`) + build de produção em `dist/`                |
+| `npm run lint`  | Oxlint                                                                     |
+| `npm test`      | Testes unitários das regras de negócio (`tests/`, test runner nativo do Node 24) |
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Estrutura
+
+- `src/pages/{institutional,auth,student,mentor,company}` — telas, uma por rota (carregadas sob demanda).
+- `src/store/authStore.ts` — sessão do Supabase Auth e tipo de conta logada.
+- `src/store/dataStore.ts` — dados do painel (carga inicial + recarga após cada ação).
+- `src/lib/supabase/` — consultas, RPCs e cadastro; `src/lib/` — regras puras (acesso, progresso, validação).
+- O controle de acesso de verdade é feito pelas políticas RLS e funções do banco; as regras em `src/lib/access.ts`
+  só espelham essas políticas na interface.

@@ -9,7 +9,7 @@ interface CompanyRow {
   email: string
   sector: string
   logo_url: string | null
-  company_admins?: { name: string; email: string; role: string }[]
+  company_admins?: { id: string; name: string; email: string; role: string }[]
 }
 
 function toCompany(row: CompanyRow): Company {
@@ -22,11 +22,11 @@ function toCompany(row: CompanyRow): Company {
     razaoSocial: row.razao_social,
     logoUrl: row.logo_url ?? undefined,
     sector: row.sector,
-    adminUsers: (row.company_admins ?? []).map((a) => ({ name: a.name, email: a.email, role: a.role })),
+    adminUsers: (row.company_admins ?? []).map((a) => ({ id: a.id, name: a.name, email: a.email, role: a.role })),
   }
 }
 
-const SELECT = '*, company_admins(name, email, role)'
+const SELECT = '*, company_admins(id, name, email, role)'
 
 export async function fetchCompanies(): Promise<Company[]> {
   const { data, error } = await supabase.from('companies').select(SELECT)

@@ -4,6 +4,7 @@ import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
 import { cn } from '../../lib/cn'
 import { formatDateTimeBR } from '../../lib/date'
+import { friendlyError } from '../../lib/errors'
 import type { MentorMessage } from '../../types'
 
 interface ChatThreadProps {
@@ -20,6 +21,7 @@ interface ChatThreadProps {
 export function ChatThread({ messages, currentUserId, otherName, onSend }: ChatThreadProps) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -31,9 +33,13 @@ export function ChatThread({ messages, currentUserId, otherName, onSend }: ChatT
     const body = draft.trim()
     if (!body || sending) return
     setSending(true)
+    setError(null)
     try {
       await onSend(body)
       setDraft('')
+    } catch (err) {
+      // Antes a falha não aparecia: a mensagem ficava no campo sem nenhum aviso.
+      setError(friendlyError(err, 'Não foi possível enviar a mensagem. Tente novamente.'))
     } finally {
       setSending(false)
     }
@@ -68,12 +74,15 @@ export function ChatThread({ messages, currentUserId, otherName, onSend }: ChatT
         <div ref={bottomRef} />
       </div>
 
+      {error && <p className="shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">{error}</p>}
       <form onSubmit={handleSubmit} className="flex shrink-0 items-center gap-2 border-t border-slate-100 p-3 dark:border-slate-700/60">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          aria-label={`Mensagem para ${otherName}`}
+          maxLength={2000}
           placeholder={`Escreva uma mensagem para ${otherName}...`}
-          className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
         />
         <Button type="submit" icon={<Send size={15} />} disabled={!draft.trim() || sending}>
           Enviar

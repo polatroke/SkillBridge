@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -21,6 +21,15 @@ const sizeClasses = {
 }
 
 export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Leva o foco para dentro do diálogo ao abrir (teclado e leitor de tela começam por ele).
+  useEffect(() => {
+    if (open) dialogRef.current?.focus()
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -40,16 +49,26 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8 backdrop-blur-sm dark:bg-black/60">
       <div
         className={cn(
-          'w-full rounded-2xl bg-white shadow-card animate-[fadeIn_0.15s_ease-out] dark:bg-slate-800',
+          'w-full rounded-2xl bg-white shadow-card outline-none animate-[fadeIn_0.15s_ease-out] dark:bg-slate-800',
           sizeClasses[size]
         )}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
+        ref={dialogRef}
       >
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5 dark:border-slate-700/60">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">{title}</h2>
-            {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
+            <h2 id={titleId} className="text-lg font-bold text-slate-900 dark:text-slate-50">
+              {title}
+            </h2>
+            {description && (
+              <p id={descriptionId} className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {description}
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}

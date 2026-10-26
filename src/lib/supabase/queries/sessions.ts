@@ -12,10 +12,12 @@ interface SessionRow {
   topic: string
   rating: number | null
   review: string | null
-  mentor_session_notes?: { notes: string }[]
+  /** session_id é a PK de mentor_session_notes (relação 1:1), então o PostgREST devolve objeto, não lista. */
+  mentor_session_notes?: { notes: string } | { notes: string }[] | null
 }
 
 function toSession(row: SessionRow): MentorSession {
+  const noteRow = Array.isArray(row.mentor_session_notes) ? row.mentor_session_notes[0] : row.mentor_session_notes
   return {
     id: row.id,
     mentorId: row.mentor_id,
@@ -27,7 +29,7 @@ function toSession(row: SessionRow): MentorSession {
     topic: row.topic,
     rating: row.rating ?? undefined,
     review: row.review ?? undefined,
-    notes: row.mentor_session_notes?.[0]?.notes ?? undefined,
+    notes: noteRow?.notes ?? undefined,
   }
 }
 
@@ -47,12 +49,26 @@ export async function upsertMentorSessionNotes(sessionId: string, mentorId: stri
 interface CertificateRow {
   id: string
   student_id: string
-  course_id: string
+  course_id: string | null
   issued_at: string
+  // Colunas de "retrato" do curso: só existem depois do SQL de certificados; `select('*')` funciona com ou sem elas.
+  course_title?: string | null
+  course_hours?: number | null
+  instructor?: string | null
+  company_name?: string | null
 }
 
 function toCertificate(row: CertificateRow): Certificate {
-  return { id: row.id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at.slice(0, 10) }
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    courseId: row.course_id ?? '',
+    issuedAt: row.issued_at.slice(0, 10),
+    courseTitle: row.course_title ?? undefined,
+    courseHours: row.course_hours ?? undefined,
+    instructor: row.instructor ?? undefined,
+    companyName: row.company_name ?? undefined,
+  }
 }
 
 export async function fetchCertificates(): Promise<Certificate[]> {

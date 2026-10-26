@@ -6,6 +6,7 @@ import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
+import { averageRating, programProgress } from '../../lib/catalog'
 
 export default function Reports() {
   const authUser = useAuthStore((s) => s.user)
@@ -16,17 +17,18 @@ export default function Reports() {
   const mentors = allMentors.filter((m) => m.companyId === companyId)
   const allMentorSessions = useDataStore((s) => s.mentorSessions)
   const sessions = allMentorSessions.filter((sess) => mentors.some((m) => m.id === sess.mentorId))
-  const allCertificates = useDataStore((s) => s.certificates)
-  const certificates = allCertificates.filter((c) => students.some((st) => st.id === c.studentId))
   const allPrograms = useDataStore((s) => s.programs)
   const programs = allPrograms.filter((p) => p.companyId === companyId)
   const allCourses = useDataStore((s) => s.courses)
   const courses = allCourses.filter((c) => c.companyId === companyId)
+  // Certificados dos cursos da empresa, inclusive de quem já saiu do treinamento (antes eram descartados).
+  const allCertificates = useDataStore((s) => s.certificates)
+  const certificates = allCertificates.filter((c) => courses.some((course) => course.id === c.courseId))
 
   const completedSessions = sessions.filter((s) => s.status === 'concluida')
-  const avgRating = completedSessions.length
-    ? (completedSessions.reduce((sum, s) => sum + (s.rating ?? 0), 0) / completedSessions.filter((s) => s.rating).length).toFixed(1)
-    : '—'
+  // Antes: sessões concluídas sem nota faziam a conta dividir por zero e a tela mostrava "NaN".
+  const avg = averageRating(completedSessions.map((s) => s.rating))
+  const avgRating = avg === null ? '—' : avg.toFixed(1)
 
   return (
     <DashboardLayout sidebar={<CompanySidebar />} profileTitle="Painel da Empresa">
@@ -43,17 +45,19 @@ export default function Reports() {
         <Card>
           <CardHeader>
             <CardTitle>Progresso por treinamento</CardTitle>
+            <p className="mt-1 text-xs text-slate-400">Média da parte dos cursos do treinamento que cada aluno já concluiu.</p>
           </CardHeader>
           <div className="space-y-4">
             {programs.map((p) => {
               const programStudents = students.filter((s) => s.programId === p.id)
-              const completedAny = programStudents.filter((s) => s.completedCourseIds.length > 0).length
-              const pct = programStudents.length ? Math.round((completedAny / programStudents.length) * 100) : 0
+              const pct = programProgress(p, students)
               return (
                 <div key={p.id}>
-                  <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
                     <span className="font-semibold text-slate-700 dark:text-slate-200">{p.name}</span>
-                    <span className="text-slate-400">{pct}%</span>
+                    <span className="shrink-0 text-slate-400">
+                      {pct}% · {programStudents.length} aluno(s) · {p.courseIds.length} curso(s)
+                    </span>
                   </div>
                   <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-700/60">
                     <div className="h-2.5 rounded-full bg-primary" style={{ width: `${pct}%` }} />

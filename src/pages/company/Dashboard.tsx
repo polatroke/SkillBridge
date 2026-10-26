@@ -6,8 +6,10 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
+import { ProgramStatusBadge } from '../../components/ui/ProgramStatusBadge'
+import { programProgress } from '../../lib/catalog'
 import { Avatar } from '../../components/ui/Avatar'
-import { Button } from '../../components/ui/Button'
+import { ButtonLink } from '../../components/ui/Button'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
 
@@ -20,15 +22,25 @@ export default function CompanyDashboard() {
   const courses = useDataStore((s) => s.courses)
   const sessions = useDataStore((s) => s.mentorSessions)
   const programs = useDataStore((s) => s.programs)
+  const certificates = useDataStore((s) => s.certificates)
 
   const activeStudents = students.filter((s) => s.companyId === companyId)
+  const companyPrograms = programs.filter((p) => p.companyId === companyId)
   const pendingRequests = requests.filter((r) => r.companyId === companyId && r.status === 'pendente')
   const companyMentors = mentors.filter((m) => m.companyId === companyId)
   const companyCourses = courses.filter((c) => c.companyId === companyId)
   const companySessions = sessions.filter((s) => companyMentors.some((m) => m.id === s.mentorId))
-  const avgProgress = activeStudents.length
-    ? Math.round((activeStudents.filter((s) => s.completedCourseIds.length > 0).length / activeStudents.length) * 100)
+  // Média, entre os alunos, da fração dos cursos do próprio treinamento que cada um concluiu (ponderada
+  // pelo nº de alunos de cada treinamento). Antes: % de alunos que concluíram qualquer curso.
+  const studentsInPrograms = companyPrograms.reduce((sum, p) => sum + activeStudents.filter((s) => s.programId === p.id).length, 0)
+  const avgProgress = studentsInPrograms
+    ? Math.round(
+        companyPrograms.reduce((sum, p) => sum + programProgress(p, activeStudents) * activeStudents.filter((s) => s.programId === p.id).length, 0) /
+          studentsInPrograms
+      )
     : 0
+  // O RLS só devolve à empresa certificados dos cursos dela.
+  const companyCertificates = certificates.filter((c) => companyCourses.some((course) => course.id === c.courseId))
 
   return (
     <DashboardLayout sidebar={<CompanySidebar />} profileTitle="Painel da Empresa">
@@ -36,9 +48,7 @@ export default function CompanyDashboard() {
         title="Dashboard da Empresa"
         description="Visão geral dos treinamentos, alunos e mentores vinculados à sua empresa."
         actions={
-          <Link to="/empresa/treinamentos">
-            <Button icon={<TrendingUp size={16} />}>Gerenciar treinamentos</Button>
-          </Link>
+          <ButtonLink to="/empresa/treinamentos" icon={<TrendingUp size={16} />}>Gerenciar treinamentos</ButtonLink>
         }
       />
 
@@ -80,9 +90,7 @@ export default function CompanyDashboard() {
             <CardTitle>Programas de treinamento</CardTitle>
           </CardHeader>
           <div className="space-y-3">
-            {programs
-              .filter((p) => p.companyId === companyId)
-              .map((p) => (
+            {companyPrograms.map((p) => (
                 <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-700/60 p-3.5">
                   <div>
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{p.name}</p>
@@ -90,9 +98,10 @@ export default function CompanyDashboard() {
                       {p.studentIds.length} alunos · {p.courseIds.length} cursos · {p.mentorIds.length} mentores
                     </p>
                   </div>
-                  <Badge status="ativo" />
+                  <ProgramStatusBadge program={p} />
                 </div>
               ))}
+            {companyPrograms.length === 0 && <p className="text-sm text-slate-400">Nenhum treinamento criado ainda.</p>}
           </div>
         </Card>
 
@@ -117,13 +126,14 @@ export default function CompanyDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Cursos publicados</CardTitle>
+              <CardTitle>Cursos da empresa</CardTitle>
             </CardHeader>
             <div className="space-y-3">
               {companyCourses.map((c) => (
                 <div key={c.id} className="flex items-center gap-2.5 text-sm">
                   <BookOpen size={15} className="shrink-0 text-primary-500" />
-                  <span className="truncate text-slate-700 dark:text-slate-200">{c.title}</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{c.title}</span>
+                  {c.status === 'rascunho' && <Badge status="rascunho" />}
                 </div>
               ))}
               {companyCourses.length === 0 && <p className="text-sm text-slate-400">Nenhum curso cadastrado ainda.</p>}
@@ -136,8 +146,9 @@ export default function CompanyDashboard() {
                 <Award size={22} />
               </div>
               <div>
-                <p className="text-sm font-bold text-primary-800">Certificados emitidos</p>
-                <p className="text-xs text-primary-600">via cursos da sua empresa</p>
+                <p className="text-2xl font-extrabold text-primary-800 dark:text-primary-200">{companyCertificates.length}</p>
+                <p className="text-sm font-bold text-primary-800 dark:text-primary-200">Certificados emitidos</p>
+                <p className="text-xs text-primary-600 dark:text-primary-300">via cursos da sua empresa</p>
               </div>
             </div>
           </Card>

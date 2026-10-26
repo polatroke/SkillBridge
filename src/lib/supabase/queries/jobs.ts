@@ -44,9 +44,13 @@ export async function fetchJobs(): Promise<Job[]> {
 }
 
 export async function insertJobRow(input: Omit<Job, 'id' | 'applicationsCount' | 'createdAt'>) {
-  const { data, error } = await supabase
+  // Id gerado aqui e insert sem .select(): o RETURNING passaria pela política de leitura, cuja função
+  // (fn_job_visible) consulta a própria tabela e ainda não enxerga a linha nova — o Postgres recusava o insert.
+  const jobId = crypto.randomUUID()
+  const { error } = await supabase
     .from('jobs')
     .insert({
+      id: jobId,
       company_id: input.companyId,
       title: input.title,
       description: input.description,
@@ -57,12 +61,10 @@ export async function insertJobRow(input: Omit<Job, 'id' | 'applicationsCount' |
       location: input.location,
       status: input.status,
     })
-    .select()
-    .single()
   if (error) throw error
-  const jobId = data.id as string
   if (input.programIds.length) {
-    await supabase.from('job_programs').insert(input.programIds.map((pid) => ({ job_id: jobId, program_id: pid })))
+    const { error: jpErr } = await supabase.from('job_programs').insert(input.programIds.map((pid) => ({ job_id: jobId, program_id: pid })))
+    if (jpErr) throw jpErr
   }
 }
 
@@ -81,8 +83,12 @@ export async function updateJobRow(id: string, patch: Partial<Job>) {
     if (error) throw error
   }
   if (patch.programIds) {
-    await supabase.from('job_programs').delete().eq('job_id', id)
-    if (patch.programIds.length) await supabase.from('job_programs').insert(patch.programIds.map((pid) => ({ job_id: id, program_id: pid })))
+    const { error: delErr } = await supabase.from('job_programs').delete().eq('job_id', id)
+    if (delErr) throw delErr
+    if (patch.programIds.length) {
+      const { error } = await supabase.from('job_programs').insert(patch.programIds.map((pid) => ({ job_id: id, program_id: pid })))
+      if (error) throw error
+    }
   }
 }
 

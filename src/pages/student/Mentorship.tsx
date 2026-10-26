@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Building2, CalendarCheck2, CalendarClock, CheckCircle2, MessageCircle, Search, Star } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
@@ -17,7 +17,14 @@ import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleMentorsForStudent } from '../../lib/access'
 import { formatDateBR, nextDateForWeekday, todayISO } from '../../lib/date'
 import { cn } from '../../lib/cn'
+import { friendlyError } from '../../lib/errors'
 import type { Mentor, MentorSession } from '../../types'
+
+/** Preço exibido no card: mentor de empresa é parte do treinamento; mentor geral sem valor é gratuito. */
+function priceLabel(mentor: Mentor) {
+  if (mentor.pricePerSession > 0) return `R$ ${mentor.pricePerSession.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/sessão`
+  return mentor.companyId ? 'Incluso no treinamento' : 'Gratuito'
+}
 
 const tabs = [
   { key: 'buscar', label: 'Buscar mentores', icon: Search },
@@ -54,9 +61,8 @@ export default function Mentorship() {
   const [sessionError, setSessionError] = useState<string | null>(null)
 
   const visibleMentors = useMemo(() => getVisibleMentorsForStudent(mentors, student), [mentors, student])
-  const filtered = visibleMentors.filter(
-    (m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()))
-  )
+  const term = search.trim().toLowerCase()
+  const filtered = visibleMentors.filter((m) => m.name.toLowerCase().includes(term) || m.skills.some((s) => s.toLowerCase().includes(term)))
 
   const openScheduling = (mentor: Mentor) => {
     setScheduling(mentor)
@@ -71,10 +77,11 @@ export default function Mentorship() {
     setBooking(true)
     setBookError(null)
     try {
-      await bookSession(scheduling.id, student.id, selectedSlot, topic || `Mentoria com ${scheduling.name}`)
+      await bookSession(scheduling.id, student.id, selectedSlot, topic.trim() || `Mentoria com ${scheduling.name}`)
       setConfirmed(true)
-    } catch {
-      setBookError('Não foi possível agendar: o horário pode ter acabado de ser reservado. Escolha outro e tente novamente.')
+    } catch (err) {
+      setSelectedSlot(null)
+      setBookError(friendlyError(err, 'Não foi possível agendar: o horário pode ter acabado de ser reservado. Escolha outro e tente novamente.'))
     } finally {
       setBooking(false)
     }
@@ -84,8 +91,8 @@ export default function Mentorship() {
     setSessionError(null)
     try {
       await cancelSession(sessionId)
-    } catch {
-      setSessionError('Não foi possível cancelar a mentoria. Tente novamente.')
+    } catch (err) {
+      setSessionError(friendlyError(err, 'Não foi possível cancelar a mentoria. Tente novamente.'))
     }
   }
 
@@ -103,8 +110,8 @@ export default function Mentorship() {
     try {
       await addSessionReview(reviewing.id, rating, review.trim())
       setReviewing(null)
-    } catch {
-      setSessionError('Não foi possível enviar sua avaliação. Tente novamente.')
+    } catch (err) {
+      setSessionError(friendlyError(err, 'Não foi possível enviar sua avaliação. Tente novamente.'))
     } finally {
       setSavingReview(false)
     }
@@ -160,6 +167,7 @@ export default function Mentorship() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome ou especialidade..."
+              aria-label="Buscar mentores"
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 pl-10 pr-4 text-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
             />
           </div>
@@ -199,7 +207,7 @@ export default function Mentorship() {
                   </div>
 
                   <div className="mt-5 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/60 pt-4">
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{mentor.pricePerSession > 0 ? `R$ ${mentor.pricePerSession}/sessão` : 'Incluso no treinamento'}</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{priceLabel(mentor)}</span>
                     <Button size="sm" disabled={availableSlots.length === 0} onClick={() => openScheduling(mentor)}>
                       {availableSlots.length === 0 ? 'Sem horários' : 'Agendar'}
                     </Button>
@@ -248,12 +256,14 @@ export default function Mentorship() {
               <div className="space-y-4">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Horários disponíveis</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {scheduling?.availability
                       .filter((a) => !a.booked)
                       .map((slot) => (
                         <button
                           key={slot.id}
+                          type="button"
+                          aria-pressed={selectedSlot === slot.id}
                           onClick={() => setSelectedSlot(slot.id)}
                           className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                             selectedSlot === slot.id ? 'border-primary bg-primary-50 dark:bg-primary-500/10 text-primary-700' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary-200'
@@ -311,11 +321,9 @@ export default function Mentorship() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <Link to={`/aluno/duvidas?with=${session.mentorId}`}>
-                        <Button size="sm" variant="secondary" icon={<MessageCircle size={14} />}>
+                      <ButtonLink to={`/aluno/duvidas?with=${session.mentorId}`} size="sm" variant="secondary" icon={<MessageCircle size={14} />}>
                           Mensagem
-                        </Button>
-                      </Link>
+                        </ButtonLink>
                       <Button size="sm" variant="danger" onClick={() => setCancelId(session.id)}>
                         Cancelar
                       </Button>
@@ -413,7 +421,9 @@ export default function Mentorship() {
           <ConfirmDialog
             open={!!cancelId}
             onClose={() => setCancelId(null)}
-            onConfirm={() => cancelId && void handleCancel(cancelId)}
+            onConfirm={async () => {
+              if (cancelId) await handleCancel(cancelId)
+            }}
             title="Cancelar mentoria"
             description="O horário volta a ficar disponível na agenda do mentor."
             confirmLabel="Cancelar mentoria"
@@ -442,7 +452,7 @@ export default function Mentorship() {
                 <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Como foi a sessão?</p>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} type="button" onClick={() => setRating(n)} aria-label={`${n} estrela${n > 1 ? 's' : ''}`}>
+                    <button key={n} type="button" onClick={() => setRating(n)} aria-label={`${n} estrela${n > 1 ? 's' : ''}`} aria-pressed={rating === n}>
                       <Star size={28} className={n <= rating ? 'text-cta' : 'text-slate-200 dark:text-slate-600'} fill="currentColor" />
                     </button>
                   ))}

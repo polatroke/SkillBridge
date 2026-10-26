@@ -1,5 +1,6 @@
 import { supabase } from '../../supabaseClient'
 import type { Program } from '../../../types'
+import { diffIds } from '../../catalog'
 
 interface ProgramRow {
   id: string
@@ -36,27 +37,31 @@ export async function fetchPrograms(): Promise<Program[]> {
 }
 
 export async function insertProgramRow(input: Omit<Program, 'id'>): Promise<string> {
-  const { data, error } = await supabase
+  // Id gerado aqui e insert sem .select(): o RETURNING passaria pela política de leitura, cuja função
+  // (fn_program_visible) consulta a própria tabela e ainda não enxerga a linha nova — o Postgres recusava o insert.
+  const programId = crypto.randomUUID()
+  const { error } = await supabase
     .from('programs')
     .insert({
+      id: programId,
       company_id: input.companyId,
       name: input.name,
       start_date: input.startDate,
       end_date: input.endDate,
       description: input.description ?? null,
     })
-    .select()
-    .single()
   if (error) throw error
-  const programId = data.id as string
   if (input.courseIds.length) {
-    await supabase.from('course_programs').insert(input.courseIds.map((cid) => ({ course_id: cid, program_id: programId })))
+    const { error: cpErr } = await supabase.from('course_programs').insert(input.courseIds.map((cid) => ({ course_id: cid, program_id: programId })))
+    if (cpErr) throw cpErr
   }
   if (input.mentorIds.length) {
-    await supabase.from('mentor_programs').insert(input.mentorIds.map((mid) => ({ mentor_id: mid, program_id: programId })))
+    const { error: mpErr } = await supabase.from('mentor_programs').insert(input.mentorIds.map((mid) => ({ mentor_id: mid, program_id: programId })))
+    if (mpErr) throw mpErr
   }
   if (input.studentIds.length) {
-    await supabase.from('students').update({ company_id: input.companyId, program_id: programId }).in('id', input.studentIds)
+    const { error: stErr } = await supabase.from('students').update({ company_id: input.companyId, program_id: programId }).in('id', input.studentIds)
+    if (stErr) throw stErr
   }
   return programId
 }
@@ -72,20 +77,39 @@ export async function updateProgramRow(id: string, patch: Partial<Program>) {
     if (error) throw error
   }
   if (patch.courseIds) {
-    await supabase.from('course_programs').delete().eq('program_id', id)
-    if (patch.courseIds.length) await supabase.from('course_programs').insert(patch.courseIds.map((cid) => ({ course_id: cid, program_id: id })))
+    const { error: delErr } = await supabase.from('course_programs').delete().eq('program_id', id)
+    if (delErr) throw delErr
+    if (patch.courseIds.length) {
+      const { error } = await supabase.from('course_programs').insert(patch.courseIds.map((cid) => ({ course_id: cid, program_id: id })))
+      if (error) throw error
+    }
   }
   if (patch.mentorIds) {
-    await supabase.from('mentor_programs').delete().eq('program_id', id)
-    if (patch.mentorIds.length) await supabase.from('mentor_programs').insert(patch.mentorIds.map((mid) => ({ mentor_id: mid, program_id: id })))
+    const { error: delErr } = await supabase.from('mentor_programs').delete().eq('program_id', id)
+    if (delErr) throw delErr
+    if (patch.mentorIds.length) {
+      const { error } = await supabase.from('mentor_programs').insert(patch.mentorIds.map((mid) => ({ mentor_id: mid, program_id: id })))
+      if (error) throw error
+    }
   }
 }
 
-/** Replace the full set of students linked to a program (mirrors the old mock's setProgramStudents). */
-export async function setProgramStudentsRows(programId: string, companyId: string, studentIds: string[]) {
-  await supabase.from('students').update({ company_id: null, program_id: null }).eq('program_id', programId)
-  if (studentIds.length) {
-    const { error } = await supabase.from('students').update({ company_id: companyId, program_id: programId }).in('id', studentIds)
+/**
+ * Deixa no treinamento exatamente os alunos de `studentIds`. Só mexe na diferença: antes desvinculava
+ * todos e vinculava de novo, então uma falha no segundo passo deixava o treinamento sem nenhum aluno.
+ */
+export async function setProgramStudentsRows(programId: string, companyId: string, studentIds: string[], currentIds: string[]) {
+  const { toAdd, toRemove } = diffIds(currentIds, studentIds)
+  if (toAdd.length) {
+    const { error } = await supabase.from('students').update({ company_id: companyId, program_id: programId }).in('id', toAdd)
+    if (error) throw error
+  }
+  if (toRemove.length) {
+    const { error } = await supabase
+      .from('students')
+      .update({ company_id: null, program_id: null })
+      .eq('program_id', programId)
+      .in('id', toRemove)
     if (error) throw error
   }
 }

@@ -59,7 +59,7 @@ export interface Company extends BaseUser {
   razaoSocial: string
   logoUrl?: string
   sector: string
-  adminUsers: { name: string; email: string; role: string }[]
+  adminUsers: { id: string; name: string; email: string; role: string }[]
 }
 
 export interface Module {
@@ -151,8 +151,17 @@ export interface MentorSession {
 export interface Certificate {
   id: string
   studentId: string
+  /** Pode ficar vazio se o curso for apagado (com o SQL de certificados aplicado). */
   courseId: string
   issuedAt: string
+  /**
+   * "Retrato" do curso no momento da emissão (colunas opcionais no banco). Um certificado não pode
+   * depender do curso continuar visível: se ele sair do treinamento ou do ar, estes campos seguram o documento.
+   */
+  courseTitle?: string
+  courseHours?: number
+  instructor?: string
+  companyName?: string
 }
 
 export interface ActivityItem {

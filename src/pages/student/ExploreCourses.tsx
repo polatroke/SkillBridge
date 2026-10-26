@@ -9,7 +9,7 @@ import { CourseCover } from '../../components/ui/CourseCover'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleCoursesForStudent, isStudentInProgram } from '../../lib/access'
-import { CATEGORIES } from '../../mocks/courses'
+import { CATEGORIES } from '../../lib/catalog'
 
 export default function ExploreCourses() {
   const authUser = useAuthStore((s) => s.user)

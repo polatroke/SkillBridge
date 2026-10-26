@@ -52,9 +52,10 @@ export async function insertStudentRow(id: string, name: string, email: string) 
 
 export async function updateStudentRow(
   id: string,
-  patch: Partial<{ companyId: string | null; programId: string | null; bio: string }>
+  patch: Partial<{ companyId: string | null; programId: string | null; bio: string; name: string }>
 ) {
   const fields: Record<string, unknown> = {}
+  if (patch.name !== undefined) fields.name = patch.name
   if (patch.companyId !== undefined) fields.company_id = patch.companyId
   if (patch.programId !== undefined) fields.program_id = patch.programId
   if (patch.bio !== undefined) fields.bio = patch.bio

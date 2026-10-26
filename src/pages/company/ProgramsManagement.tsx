@@ -4,14 +4,16 @@ import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { CompanySidebar } from '../../components/layout/CompanySidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
-import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Input, Textarea } from '../../components/ui/Field'
 import { MultiSelect } from '../../components/ui/MultiSelect'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
+import { ProgramStatusBadge } from '../../components/ui/ProgramStatusBadge'
 import { formatDateBR } from '../../lib/date'
+import { friendlyError } from '../../lib/errors'
+import { cleanName } from '../../lib/validation'
 import type { Program } from '../../types'
 
 const blankForm = () => ({
@@ -33,20 +35,22 @@ export default function ProgramsManagement() {
   const courses = allCourses.filter((c) => c.companyId === companyId)
   const allMentors = useDataStore((s) => s.mentors)
   const mentors = allMentors.filter((m) => m.companyId === companyId)
-  const students = useDataStore((s) => s.students)
+  const allStudents = useDataStore((s) => s.students)
+  const requests = useDataStore((s) => s.enrollmentRequests)
   const addProgram = useDataStore((s) => s.addProgram)
   const updateProgram = useDataStore((s) => s.updateProgram)
   const setProgramStudents = useDataStore((s) => s.setProgramStudents)
-  const updateCourse = useDataStore((s) => s.updateCourse)
-  const updateMentorPrograms = useDataStore((s) => s.updateMentorPrograms)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Program | null>(null)
   const [form, setForm] = useState(blankForm())
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const openCreate = () => {
     setEditing(null)
     setForm(blankForm())
+    setFormError(null)
     setFormOpen(true)
   }
 
@@ -61,55 +65,55 @@ export default function ProgramsManagement() {
       mentorIds: program.mentorIds,
       studentIds: program.studentIds,
     })
+    setFormError(null)
     setFormOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Quem pode ser vinculado direto: alunos que já estão na empresa ou que pediram para entrar nela.
+  // Antes a lista trazia todo aluno visível, inclusive os recusados.
+  const linkableStudents = allStudents.filter(
+    (s) =>
+      s.companyId === companyId ||
+      form.studentIds.includes(s.id) ||
+      requests.some((r) => r.studentId === s.id && r.companyId === companyId && r.status !== 'recusado')
+  )
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    let programId = editing?.id
-    if (editing) {
-      updateProgram(editing.id, {
-        name: form.name,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        description: form.description,
-        courseIds: form.courseIds,
-        mentorIds: form.mentorIds,
-      })
-    } else {
-      addProgram({
-        companyId,
-        name: form.name,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        description: form.description,
-        courseIds: form.courseIds,
-        mentorIds: form.mentorIds,
-        studentIds: [],
-      })
-      // acha o novo id (último criado) para sincronizar vínculos
-      programId = useDataStore.getState().programs.find((p) => p.companyId === companyId && p.name === form.name)?.id
+    const name = cleanName(form.name)
+    if (!name) {
+      setFormError('Dê um nome ao treinamento.')
+      return
     }
-
-    if (programId) {
-      // sincroniza vínculo curso -> treinamento
-      courses.forEach((c) => {
-        const shouldHave = form.courseIds.includes(c.id)
-        const has = c.programIds.includes(programId!)
-        if (shouldHave && !has) updateCourse(c.id, { programIds: [...c.programIds, programId!] })
-        if (!shouldHave && has) updateCourse(c.id, { programIds: c.programIds.filter((id) => id !== programId) })
-      })
-      // sincroniza vínculo mentor -> treinamento
-      mentors.forEach((m) => {
-        const shouldHave = form.mentorIds.includes(m.id)
-        const has = m.programIds.includes(programId!)
-        if (shouldHave && !has) updateMentorPrograms(m.id, [...m.programIds, programId!])
-        if (!shouldHave && has) updateMentorPrograms(m.id, m.programIds.filter((id) => id !== programId))
-      })
-      setProgramStudents(programId, form.studentIds)
+    if (form.endDate < form.startDate) {
+      setFormError('A data de término precisa ser igual ou posterior à data de início.')
+      return
     }
-
-    setFormOpen(false)
+    const details = {
+      name,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      description: form.description.trim(),
+      courseIds: form.courseIds,
+      mentorIds: form.mentorIds,
+    }
+    setSaving(true)
+    setFormError(null)
+    try {
+      if (editing) {
+        // updateProgram já substitui os vínculos curso↔treinamento e mentor↔treinamento deste programa;
+        // gravar de novo por curso/mentor (como antes) concorria com isso e podia perder vínculos.
+        await updateProgram(editing.id, details)
+        await setProgramStudents(editing.id, form.studentIds)
+      } else {
+        await addProgram({ companyId, ...details, studentIds: form.studentIds })
+      }
+      setFormOpen(false)
+    } catch (err) {
+      setFormError(friendlyError(err, 'Não foi possível salvar o treinamento. Revise os dados e tente novamente.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -134,7 +138,7 @@ export default function ProgramsManagement() {
                   <CalendarRange size={13} /> {formatDateBR(p.startDate)} – {formatDateBR(p.endDate)}
                 </p>
               </div>
-              <Badge status="ativo" />
+              <ProgramStatusBadge program={p} />
             </CardHeader>
             {p.description && <p className="text-sm text-slate-500 dark:text-slate-400">{p.description}</p>}
             <div className="mt-4 grid grid-cols-3 gap-3 text-center">
@@ -174,13 +178,15 @@ export default function ProgramsManagement() {
             <Button variant="ghost" onClick={() => setFormOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit}>{editing ? 'Salvar alterações' : 'Criar treinamento'}</Button>
+            <Button type="submit" form="program-form" disabled={saving}>
+              {saving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Criar treinamento'}
+            </Button>
           </>
         }
       >
-        <form className="space-y-5" onSubmit={handleSubmit}>
+        <form id="program-form" className="space-y-5" onSubmit={handleSubmit}>
           <Input label="Nome do treinamento" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Data de início" type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} required />
             <Input label="Data de término" type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} required />
           </div>
@@ -202,13 +208,18 @@ export default function ProgramsManagement() {
           />
           <MultiSelect
             label="Alunos vinculados"
-            options={students.map((s) => ({ id: s.id, label: `${s.name} (${s.email})` }))}
+            options={linkableStudents.map((s) => ({
+              id: s.id,
+              label: `${s.name} (${s.email})${s.companyId && s.companyId !== companyId ? ' · em treinamento de outra empresa' : ''}`,
+            }))}
+            emptyLabel="Nenhum aluno disponível. Convide alunos em Gestão de Alunos."
             selected={form.studentIds}
             onChange={(ids) => setForm((f) => ({ ...f, studentIds: ids }))}
           />
           <p className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Users size={13} /> Alunos vinculados aqui têm acesso imediato — sem necessidade de aprovação manual.
+            <Users size={13} /> Alunos vinculados aqui têm acesso imediato. Cada aluno participa de um treinamento por vez: vincular aqui o tira do anterior.
           </p>
+          {formError && <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formError}</p>}
         </form>
       </Modal>
     </DashboardLayout>

@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Award, CheckCircle2, Circle, MessageCircle, Play
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { useAuthStore } from '../../store/authStore'
@@ -12,6 +12,7 @@ import { useCurrentStudent, useDataStore } from '../../store/dataStore'
 import { canStudentAccessCourse } from '../../lib/access'
 import { flattenLessons, getCourseProgress } from '../../lib/progress'
 import { cn } from '../../lib/cn'
+import { friendlyError } from '../../lib/errors'
 
 /** Parâmetro ?aula=<módulo>-<aula> (índices a partir de 0). */
 function parseLessonParam(value: string | null) {
@@ -46,11 +47,9 @@ export default function CoursePlayer() {
   if (!canStudentAccessCourse(course, student)) return <Navigate to={`/aluno/cursos/${course.id}`} replace />
 
   const backToCourse = (
-    <Link to={`/aluno/cursos/${course.id}`}>
-      <Button variant="secondary" size="sm">
+    <ButtonLink to={`/aluno/cursos/${course.id}`} variant="secondary" size="sm">
         Voltar para o curso
-      </Button>
-    </Link>
+      </ButtonLink>
   )
 
   if (!student.enrolledCourseIds.includes(course.id)) {
@@ -86,6 +85,10 @@ export default function CoursePlayer() {
   const next = lessons[currentPos + 1]
   const currentDone = progress.isLessonDone(current)
   const certificate = certificates.find((c) => c.studentId === student.id && c.courseId === course.id)
+  // Concluir esta aula fecha o curso? Só se ela for a única que falta — na última aula com outras pendentes
+  // o botão dizia "Concluir curso" e nada acontecia.
+  const isLastPending = !currentDone && progress.total - progress.done === 1
+  const firstPendingOther = lessons.find((l) => !progress.isLessonDone(l) && !(l.moduleIndex === current.moduleIndex && l.lessonIndex === current.lessonIndex))
 
   const goTo = (lesson: { moduleIndex: number; lessonIndex: number }) => {
     setError(null)
@@ -99,8 +102,9 @@ export default function CoursePlayer() {
       const { courseCompleted } = await completeLesson(course.id, current.moduleIndex, current.lessonIndex)
       if (courseCompleted) setFinished(true)
       else if (next) goTo(next)
-    } catch {
-      setError('Não foi possível salvar seu progresso. Tente novamente.')
+      else if (firstPendingOther) goTo(firstPendingOther)
+    } catch (err) {
+      setError(friendlyError(err, 'Não foi possível salvar seu progresso. Tente novamente.'))
     } finally {
       setSaving(false)
     }
@@ -161,14 +165,18 @@ export default function CoursePlayer() {
                     <Button iconRight={<ArrowRight size={16} />} onClick={() => goTo(next)}>
                       Próxima aula
                     </Button>
+                  ) : progress.nextLesson ? (
+                    <Button iconRight={<ArrowRight size={16} />} onClick={() => goTo(progress.nextLesson!)}>
+                      Ir para aula pendente
+                    </Button>
                   ) : (
                     <Button variant="secondary" onClick={() => navigate(`/aluno/cursos/${course.id}`)}>
                       Voltar para o curso
                     </Button>
                   )
                 ) : (
-                  <Button iconRight={next ? <ArrowRight size={16} /> : <Award size={16} />} disabled={saving} onClick={handleComplete}>
-                    {saving ? 'Salvando...' : next ? 'Concluir e avançar' : 'Concluir curso'}
+                  <Button iconRight={isLastPending ? <Award size={16} /> : <ArrowRight size={16} />} disabled={saving} onClick={handleComplete}>
+                    {saving ? 'Salvando...' : isLastPending ? 'Concluir curso' : next ? 'Concluir e avançar' : 'Concluir aula'}
                   </Button>
                 )}
               </div>

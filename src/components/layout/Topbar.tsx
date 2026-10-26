@@ -1,23 +1,47 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, ChevronDown, LogOut, User } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react'
 import { Avatar } from '../ui/Avatar'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore } from '../../store/dataStore'
 import { getUnreadMessages, senderNameFor, threadLinkFor } from '../../lib/notifications'
 import { formatDateTimeBR } from '../../lib/date'
+import { useMobileNav } from './mobileNav'
 
 const accountTypeLabel = { student: 'Aluno', mentor: 'Mentor', company: 'Empresa' } as const
 
 export function Topbar({ profileTitle }: { profileTitle: string }) {
-  const { user, accountType, logout } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
+  const accountType = useAuthStore((s) => s.accountType)
+  const logout = useAuthStore((s) => s.logout)
+  const mobileNav = useMobileNav()
   const messages = useDataStore((s) => s.mentorMessages)
   const mentors = useDataStore((s) => s.mentors)
   const students = useDataStore((s) => s.students)
   const navigate = useNavigate()
   const [notifOpen, setNotifOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const menusRef = useRef<HTMLDivElement>(null)
+
+  // Fecha os menus ao clicar fora deles ou apertar Esc.
+  useEffect(() => {
+    if (!notifOpen && !menuOpen) return
+    const close = () => {
+      setNotifOpen(false)
+      setMenuOpen(false)
+    }
+    const onPointer = (e: MouseEvent) => {
+      if (!menusRef.current?.contains(e.target as Node)) close()
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [notifOpen, menuOpen])
 
   const unread = getUnreadMessages(messages, user).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
@@ -27,20 +51,37 @@ export function Topbar({ profileTitle }: { profileTitle: string }) {
   }
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
+    setMenuOpen(false)
+    void logout()
+    navigate('/login', { replace: true })
   }
 
   const profilePath = accountType === 'student' ? '/aluno/perfil' : accountType === 'mentor' ? '/mentor/perfil' : '/empresa/configuracoes'
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-100 bg-white/90 px-6 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary-400">{profileTitle}</p>
-        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Bem-vindo(a) de volta, {user?.name.split(' ')[0]}</p>
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white/90 px-4 backdrop-blur sm:px-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => mobileNav.setOpen(true)}
+          className="-ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 lg:hidden dark:text-slate-400 dark:hover:bg-slate-800"
+          aria-label="Abrir menu"
+          aria-controls="painel-menu"
+          aria-expanded={mobileNav.open}
+        >
+          <Menu size={20} />
+        </button>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase tracking-wide text-primary-400">{profileTitle}</p>
+          <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">
+            <span className="hidden sm:inline">Bem-vindo(a) de volta, </span>
+            <span className="sm:hidden">Olá, </span>
+            {user?.name.split(' ')[0]}
+          </p>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div ref={menusRef} className="flex items-center gap-2">
         <ThemeToggle />
 
         <div className="relative">
@@ -50,7 +91,8 @@ export function Topbar({ profileTitle }: { profileTitle: string }) {
               setMenuOpen(false)
             }}
             className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            aria-label="Notificações"
+            aria-label={unread.length > 0 ? `Notificações (${unread.length} não lidas)` : 'Notificações'}
+            aria-expanded={notifOpen}
           >
             <Bell size={19} />
             {unread.length > 0 && (
@@ -60,7 +102,7 @@ export function Topbar({ profileTitle }: { profileTitle: string }) {
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-100 bg-white p-2 shadow-card dark:border-slate-700/60 dark:bg-slate-800">
+            <div className="absolute right-0 mt-2 max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-card dark:border-slate-700/60 dark:bg-slate-800">
               <p className="px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-400">Notificações</p>
               {user &&
                 unread.map((m) => (
@@ -86,6 +128,8 @@ export function Topbar({ profileTitle }: { profileTitle: string }) {
               setNotifOpen(false)
             }}
             className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Menu da conta"
+            aria-expanded={menuOpen}
           >
             <Avatar name={user?.name ?? '?'} size="sm" />
             <span className="hidden text-left sm:block">

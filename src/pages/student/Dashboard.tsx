@@ -5,7 +5,7 @@ import { StudentSidebar } from '../../components/layout/StudentSidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { StatCard } from '../../components/ui/StatCard'
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
+import { ButtonLink } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { CourseCover } from '../../components/ui/CourseCover'
 import { useAuthStore } from '../../store/authStore'
@@ -48,9 +48,7 @@ export default function StudentDashboard() {
         title={`Olá, ${student.name.split(' ')[0]}! 👋`}
         description={inProgram ? 'Continue sua jornada na sua trilha corporativa.' : 'Continue evoluindo no catálogo geral da SkillBridge.'}
         actions={
-          <Link to="/aluno/cursos">
-            <Button icon={<BookOpen size={16} />}>Explorar cursos</Button>
-          </Link>
+          <ButtonLink to="/aluno/cursos" icon={<BookOpen size={16} />}>Explorar cursos</ButtonLink>
         }
       />
 
@@ -78,18 +76,14 @@ export default function StudentDashboard() {
                   </p>
                 </div>
               </div>
-              <Link to="/aluno/mentoria?aba=sessoes">
-                <Button variant="secondary" size="sm">
+              <ButtonLink to="/aluno/mentoria?aba=sessoes" variant="secondary" size="sm">
                   Ver detalhes
-                </Button>
-              </Link>
+                </ButtonLink>
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 p-6 text-center">
               <p className="text-sm text-slate-500 dark:text-slate-400">Você não tem mentorias agendadas no momento.</p>
-              <Link to="/aluno/mentoria" className="mt-3 inline-block">
-                <Button size="sm">Agendar mentoria</Button>
-              </Link>
+              <ButtonLink to="/aluno/mentoria" className="mt-3" size="sm">Agendar mentoria</ButtonLink>
             </div>
           )}
 

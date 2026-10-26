@@ -6,8 +6,14 @@ const STORAGE_KEY = 'skillbridge-theme'
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'light'
-  const stored = window.localStorage.getItem(STORAGE_KEY)
-  if (stored === 'light' || stored === 'dark') return stored
+  try {
+    // Com cookies/dados do site bloqueados, só ler o localStorage já lança — e isto roda no
+    // carregamento do módulo, então derrubava o app inteiro antes do primeiro render.
+    const stored = window.localStorage.getItem(STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark') return stored
+  } catch {
+    /* sem armazenamento: segue a preferência do sistema */
+  }
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
