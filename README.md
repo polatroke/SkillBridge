@@ -28,6 +28,15 @@ com autenticação e banco no Supabase (Postgres + RLS).
 | `npm run lint`  | Oxlint                                                                     |
 | `npm test`      | Testes unitários das regras de negócio (`tests/`, test runner nativo do Node 24) |
 
+## Deploy (Vercel)
+
+1. Importe o repositório na Vercel (preset **Vite** detectado automaticamente: `npm run build` → `dist`).
+2. Em **Environment Variables**, cadastre `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (os mesmos valores do `.env`).
+3. No Supabase, em **Authentication → URL Configuration**, use o domínio da Vercel como **Site URL** e adicione-o
+   em **Redirect URLs** — senão os e-mails de confirmação apontam para `localhost`.
+
+O `vercel.json` redireciona todas as rotas para `index.html`, para que recarregar páginas como `/login` não dê 404.
+
 ## Estrutura
 
 - `src/pages/{institutional,auth,student,mentor,company}` — telas, uma por rota (carregadas sob demanda).
