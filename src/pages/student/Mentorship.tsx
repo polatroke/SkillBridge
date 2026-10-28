@@ -15,7 +15,7 @@ import { Textarea } from '../../components/ui/Field'
 import { useAuthStore } from '../../store/authStore'
 import { useDataStore, useCurrentStudent } from '../../store/dataStore'
 import { getVisibleMentorsForStudent } from '../../lib/access'
-import { formatDateBR, nextDateForWeekday, todayISO } from '../../lib/date'
+import { formatDateBR, nextDateForWeekday, sortByNextOccurrence, todayISO } from '../../lib/date'
 import { cn } from '../../lib/cn'
 import { friendlyError } from '../../lib/errors'
 import type { Mentor, MentorSession } from '../../types'
@@ -257,26 +257,24 @@ export default function Mentorship() {
                 <div>
                   <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Horários disponíveis</p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {scheduling?.availability
-                      .filter((a) => !a.booked)
-                      .map((slot) => (
-                        <button
-                          key={slot.id}
-                          type="button"
-                          aria-pressed={selectedSlot === slot.id}
-                          onClick={() => setSelectedSlot(slot.id)}
-                          className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
-                            selectedSlot === slot.id ? 'border-primary bg-primary-50 dark:bg-primary-500/10 text-primary-700' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary-200'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5 font-semibold">
-                            <CalendarCheck2 size={13} /> {slot.weekday}
-                          </span>
-                          <span className="mt-0.5 block text-xs text-slate-400">
-                            {formatDateBR(nextDateForWeekday(slot.weekday))} · {slot.start}–{slot.end}
-                          </span>
-                        </button>
-                      ))}
+                    {sortByNextOccurrence(scheduling?.availability.filter((a) => !a.booked) ?? []).map((slot) => (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        aria-pressed={selectedSlot === slot.id}
+                        onClick={() => setSelectedSlot(slot.id)}
+                        className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                          selectedSlot === slot.id ? 'border-primary bg-primary-50 dark:bg-primary-500/10 text-primary-700' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary-200'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 font-semibold">
+                          <CalendarCheck2 size={13} /> {slot.weekday}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-400">
+                          {formatDateBR(nextDateForWeekday(slot.weekday))} · {slot.start}–{slot.end}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <label className="block">

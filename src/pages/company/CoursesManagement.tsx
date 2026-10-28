@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookOpen, Plus, Search, SquarePen, Trash2, X } from 'lucide-react'
+import { BookOpen, Clock, Eye, Plus, Search, SquarePen, Trash2, User, X } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { CompanySidebar } from '../../components/layout/CompanySidebar'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -58,11 +58,15 @@ export default function CoursesManagement() {
   const [editing, setEditing] = useState<Course | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [toDelete, setToDelete] = useState<Course | null>(null)
+  // Guarda só o id: o modal de detalhes lê o curso da store e reflete uma edição feita a partir dele.
+  const [viewingId, setViewingId] = useState<string | null>(null)
   const [form, setForm] = useState(blankForm())
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const companyCourses = courses.filter((c) => c.companyId === companyId).filter((c) => c.title.toLowerCase().includes(search.toLowerCase()))
+  const viewing = viewingId ? courses.find((c) => c.id === viewingId) : undefined
+  const linkedPrograms = (course: Course) => programs.filter((p) => course.programIds.includes(p.id))
 
   const openCreate = () => {
     setEditing(null)
@@ -183,20 +187,22 @@ export default function CoursesManagement() {
                 <Badge status={course.status === 'publicado' ? 'publicado' : 'rascunho'} />
               </div>
               <h3 className="mt-1.5 line-clamp-2 text-sm font-bold text-slate-800 dark:text-slate-100">{course.title}</h3>
+              <p className="mt-1.5 line-clamp-3 text-xs text-slate-500 dark:text-slate-400">{course.summary}</p>
               <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
                 <BookOpen size={13} /> {course.enrolledCount} alunos matriculados
               </p>
               <div className="mt-2 flex flex-wrap gap-1">
-                {programs
-                  .filter((p) => course.programIds.includes(p.id))
-                  .map((p) => (
-                    <span key={p.id} className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-semibold text-primary-600">
-                      {p.name}
-                    </span>
-                  ))}
+                {linkedPrograms(course).map((p) => (
+                  <span key={p.id} className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-semibold text-primary-600">
+                    {p.name}
+                  </span>
+                ))}
                 {course.programIds.length === 0 && <span className="text-xs text-slate-400">Sem treinamento vinculado</span>}
               </div>
-              <div className="mt-4 flex items-center gap-2 border-t border-slate-100 dark:border-slate-700/60 pt-3.5">
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 dark:border-slate-700/60 pt-3.5">
+                <Button variant="ghost" size="sm" icon={<Eye size={13} />} onClick={() => setViewingId(course.id)}>
+                  Detalhes
+                </Button>
                 <Button variant="secondary" size="sm" icon={<SquarePen size={13} />} onClick={() => openEdit(course)}>
                   Editar
                 </Button>
@@ -352,6 +358,97 @@ export default function CoursesManagement() {
           </Select>
           {formError && <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formError}</p>}
         </form>
+      </Modal>
+
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewingId(null)}
+        title={viewing?.title ?? ''}
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setViewingId(null)}>
+              Fechar
+            </Button>
+            <Button
+              icon={<SquarePen size={14} />}
+              onClick={() => {
+                if (!viewing) return
+                setViewingId(null)
+                openEdit(viewing)
+              }}
+            >
+              Editar curso
+            </Button>
+          </>
+        }
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <CourseCover coverUrl={viewing.coverUrl} title={viewing.title} className="h-40 w-full rounded-xl object-cover" iconSize={36} />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-primary-500">{viewing.category}</span>
+              <Badge status={viewing.status === 'publicado' ? 'publicado' : 'rascunho'} />
+            </div>
+
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Clock size={14} /> {viewing.totalHours}h de carga horária
+              </span>
+              <span className="flex items-center gap-1.5">
+                <User size={14} /> {viewing.instructor}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <BookOpen size={14} /> {viewing.enrolledCount} alunos matriculados
+              </span>
+            </div>
+
+            <section>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">Descrição</h4>
+              <p className="mt-1.5 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{viewing.summary}</p>
+            </section>
+
+            <section>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">Módulos e aulas</h4>
+              {viewing.modules.length === 0 ? (
+                <p className="mt-1.5 text-sm text-slate-400">Nenhum módulo cadastrado.</p>
+              ) : (
+                <ol className="mt-2 space-y-2">
+                  {viewing.modules.map((mod, idx) => (
+                    <li key={mod.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                      <p className="flex flex-wrap items-baseline gap-x-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        {idx + 1}. {mod.title}
+                        <span className="text-xs font-normal text-slate-400">
+                          {[mod.duration, `${mod.lessons.length} aula(s)`].filter(Boolean).join(' · ')}
+                        </span>
+                      </p>
+                      {mod.lessons.length > 0 && (
+                        <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
+                          {mod.lessons.map((lesson, i) => (
+                            <li key={i}>{lesson}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <section>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">Treinamentos vinculados</h4>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {linkedPrograms(viewing).map((p) => (
+                  <span key={p.id} className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-semibold text-primary-600">
+                    {p.name}
+                  </span>
+                ))}
+                {viewing.programIds.length === 0 && <span className="text-sm text-slate-400">Sem treinamento vinculado</span>}
+              </div>
+            </section>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatDateBR, nextDateForWeekday, toISODate } from '../src/lib/date.ts'
+import { formatDateBR, nextDateForWeekday, sortByNextOccurrence, toISODate } from '../src/lib/date.ts'
 import { accountTypeForPath, homePathFor } from '../src/lib/routes.ts'
 import { friendlyError, isMissingRpc, userError } from '../src/lib/errors.ts'
 
@@ -20,6 +20,21 @@ test('nextDateForWeekday sempre cai no dia pedido, entre amanhã e daqui a 7 dia
     assert.equal(date.getDay(), index, name)
     assert.ok(days >= 1 && days <= 7, `${name}: ${days} dias`)
   }
+})
+
+test('sortByNextOccurrence segue o calendário: data mais próxima primeiro, depois a hora', () => {
+  const wednesday = new Date(2026, 9, 28) // quarta-feira, 28/10/2026
+  const slots = [
+    { id: 'seg', weekday: 'Segunda', start: '10:00' }, // 02/11
+    { id: 'qua', weekday: 'Quarta', start: '08:00' }, // hoje é quarta: próxima é 04/11
+    { id: 'qui-9', weekday: 'Quinta', start: '09:00' }, // 29/10
+    { id: 'qui-8', weekday: 'Quinta', start: '08:00' }, // 29/10
+  ] as const
+  assert.deepEqual(
+    sortByNextOccurrence([...slots], wednesday).map((s) => s.id),
+    ['qui-8', 'qui-9', 'seg', 'qua']
+  )
+  assert.equal(nextDateForWeekday('Segunda', wednesday), '2026-11-02')
 })
 
 test('accountTypeForPath identifica o painel dono da rota sem confundir prefixos', () => {

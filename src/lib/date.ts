@@ -22,12 +22,23 @@ export function todayISO(): string {
 }
 
 /** Retorna a próxima data (YYYY-MM-DD) a partir de hoje que cai no dia da semana informado. */
-export function nextDateForWeekday(weekday: Availability['weekday']): string {
+export function nextDateForWeekday(weekday: Availability['weekday'], from: Date = new Date()): string {
   const target = weekdayIndex[weekday]
-  const date = new Date()
+  const date = new Date(from)
   const diff = (target - date.getDay() + 7) % 7 || 7
   date.setDate(date.getDate() + diff)
   return toISODate(date)
+}
+
+/**
+ * Horários semanais em ordem de calendário (próxima data, depois hora de início). A ordem do banco
+ * não segue o calendário: uma "Segunda" do mês seguinte aparecia antes de uma "Quinta" desta semana.
+ */
+export function sortByNextOccurrence<T extends Pick<Availability, 'weekday' | 'start'>>(slots: T[], from: Date = new Date()): T[] {
+  return slots
+    .map((slot) => ({ slot, key: `${nextDateForWeekday(slot.weekday, from)} ${slot.start}` }))
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map(({ slot }) => slot)
 }
 
 export function formatDateBR(iso: string): string {

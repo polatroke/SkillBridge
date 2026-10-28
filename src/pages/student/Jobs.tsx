@@ -92,18 +92,24 @@ export default function StudentJobs() {
                       <span className="rounded-full bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{job.type}</span>
                     </div>
                     <h3 className="mt-2 text-lg font-bold text-slate-800 dark:text-slate-100">{job.title}</h3>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{job.description}</p>
+                    <p className="mt-1 whitespace-pre-line text-sm text-slate-500 dark:text-slate-400">{job.description}</p>
                     <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
                       <span className="flex items-center gap-1">
                         <MapPin size={13} /> {[job.location, job.mode].filter(Boolean).join(' · ')}
                       </span>
                       <span>{job.department}</span>
                     </div>
-                    <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-slate-500 dark:text-slate-400">
-                      {job.requirements.slice(0, 3).map((r) => (
-                        <li key={r}>{r}</li>
-                      ))}
-                    </ul>
+                    {/* Todos os requisitos: antes só os 3 primeiros apareciam e o resto sumia sem aviso. */}
+                    {job.requirements.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Requisitos</p>
+                        <ul className="mt-1.5 list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                          {job.requirements.map((r, idx) => (
+                            <li key={idx}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                   {application ? (
                     <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">

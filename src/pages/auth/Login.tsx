@@ -16,17 +16,6 @@ const typeConfig: Record<AccountType, { label: string; icon: typeof GraduationCa
   company: { label: 'Empresa', icon: Building2 },
 }
 
-const demoAccounts: { type: AccountType; label: string; value: string; hint: string }[] = [
-  { type: 'student', label: 'Marina Duarte', value: 'marina.duarte@email.com', hint: 'aluna sem treinamento ativo' },
-  { type: 'student', label: 'Rafael Nogueira', value: 'rafael.nogueira@email.com', hint: 'aluno com treinamento TechNova' },
-  { type: 'mentor', label: 'Beatriz Lima', value: 'beatriz.lima@email.com', hint: 'mentora geral da plataforma' },
-  { type: 'mentor', label: 'Eduardo Silva', value: 'eduardo.silva@technova.com.br', hint: 'mentor vinculado à TechNova' },
-  { type: 'company', label: 'TechNova Soluções', value: 'patricia.menezes@technova.com.br', hint: 'painel de empresa' },
-]
-
-/** Senha compartilhada por todas as contas de demonstração semeadas no banco. */
-const DEMO_PASSWORD = 'SkillBridge#2026'
-
 export default function Login() {
   // Quem chega de um link protegido (ex: card de curso na tela inicial) volta para lá depois de entrar.
   const rawFrom = (useLocation().state as { from?: string } | null)?.from
@@ -75,30 +64,6 @@ export default function Login() {
           <p className="mt-4 max-w-md text-slate-500 dark:text-slate-400">
             Cursos, mentoria e oportunidades em um só lugar. Entre com o tipo de conta certo para acessar seu painel.
           </p>
-          <div className="mt-10 space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-              Contas de demonstração <span className="font-normal normal-case text-slate-400">(senha: {DEMO_PASSWORD})</span>
-            </p>
-            {demoAccounts.map((acc) => (
-              <button
-                key={acc.value}
-                onClick={() => {
-                  setType(acc.type)
-                  setEmail(acc.value)
-                  setPassword(DEMO_PASSWORD)
-                }}
-                className="flex w-full items-center justify-between rounded-xl border border-slate-100 dark:border-slate-700/60 bg-white px-4 py-3 text-left text-sm shadow-soft transition-colors hover:border-primary-200 dark:bg-slate-800 dark:hover:border-primary-500/40"
-              >
-                <span>
-                  <span className="block font-semibold text-slate-800 dark:text-slate-100">{acc.label}</span>
-                  <span className="block text-xs text-slate-400">{acc.hint}</span>
-                </span>
-                <span className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2.5 py-1 text-xs font-semibold text-primary-600">
-                  {typeConfig[acc.type].label}
-                </span>
-              </button>
-            ))}
-          </div>
         </div>
 
         <Card padding="lg" className="w-full max-w-md">

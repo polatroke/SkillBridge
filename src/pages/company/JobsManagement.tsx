@@ -46,6 +46,9 @@ export default function JobsManagement() {
   const applications = useDataStore((s) => s.jobApplications)
   const students = useDataStore((s) => s.students)
   const [viewingApplicants, setViewingApplicants] = useState<Job | null>(null)
+  // Só o id: o modal lê a vaga da store e reflete uma edição feita a partir dele.
+  const [viewingId, setViewingId] = useState<string | null>(null)
+  const viewing = viewingId ? jobs.find((j) => j.id === viewingId) : undefined
 
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -176,7 +179,14 @@ export default function JobsManagement() {
               {filtered.map((job) => (
                 <tr key={job.id}>
                   <td className="px-5 py-3.5">
-                    <p className="font-semibold text-slate-800 dark:text-slate-100">{job.title}</p>
+                    <button
+                      type="button"
+                      onClick={() => setViewingId(job.id)}
+                      className="text-left font-semibold text-slate-800 hover:text-primary-700 hover:underline dark:text-slate-100 dark:hover:text-primary-300"
+                      title="Ver detalhes da vaga"
+                    >
+                      {job.title}
+                    </button>
                     <p className="text-xs text-slate-400">
                       {job.department} · {job.type}
                     </p>
@@ -324,6 +334,73 @@ export default function JobsManagement() {
           </Select>
           {formError && <p className="text-sm font-semibold text-red-600 dark:text-red-400">{formError}</p>}
         </form>
+      </Modal>
+
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewingId(null)}
+        title={viewing?.title ?? ''}
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setViewingId(null)}>
+              Fechar
+            </Button>
+            <Button
+              icon={<SquarePen size={14} />}
+              onClick={() => {
+                if (!viewing) return
+                setViewingId(null)
+                openEdit(viewing)
+              }}
+            >
+              Editar vaga
+            </Button>
+          </>
+        }
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge status={viewing.status === 'aberta' ? 'aberta' : 'encerrada'} />
+              <span className="rounded-full bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{viewing.type}</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {[viewing.department, viewing.mode, viewing.location].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+
+            <section>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">Descrição</h4>
+              <p className="mt-1.5 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{viewing.description}</p>
+            </section>
+
+            <section>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">Requisitos</h4>
+              {viewing.requirements.length === 0 ? (
+                <p className="mt-1.5 text-sm text-slate-400">Nenhum requisito cadastrado.</p>
+              ) : (
+                <ul className="mt-1.5 list-inside list-disc space-y-1 text-sm text-slate-700 dark:text-slate-200">
+                  {viewing.requirements.map((r, idx) => (
+                    <li key={idx}>{r}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-400">Treinamentos vinculados</h4>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {programs
+                  .filter((p) => viewing.programIds.includes(p.id))
+                  .map((p) => (
+                    <span key={p.id} className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-xs font-semibold text-primary-600">
+                      {p.name}
+                    </span>
+                  ))}
+              </div>
+            </section>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog
